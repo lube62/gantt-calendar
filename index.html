@@ -1,0 +1,2658 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gantt · Google Calendar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+  :root{
+    --bg:#C9CFD8;
+    --panel:#FFFFFF;
+    --ink:#20242B;
+    --ink-soft:#6B7280;
+    --line:#EAEBEF;
+    --line-strong:#D7D9E2;
+    --line-mid:#B9BFCC;
+    --line-dark:#8892A6;
+    --outline:#5A6478;
+    --outline-w:2px;   /* spessore del contorno esterno e delle due linee di separazione */
+    --accent:#3B78E7;
+    --accent-dark:#2C5FC0;
+    --accent-soft:#E8F0FE;
+    --weekend:#D9603F;
+    --weekend-bg:#F4F1EC;
+    --sat-bg:#D0E1FD;
+    --sun-bg:#FFE0ED;
+    --today-bg:#FFF0B3;
+    --today-bg-head:#FFD84D;
+    --danger:#C0392B;
+    --row-h:56px;
+    --task-font:13px;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;overflow:hidden;overscroll-behavior:none;margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:'Inter',sans-serif;}
+  h1,h2,h3{font-weight:700;margin:0;}
+  button{font-family:'Inter',sans-serif;cursor:pointer;}
+
+  /* --- Setup screen --- */
+  #setup{ height:100vh;overflow:auto;display:flex;align-items:center;justify-content:center;padding:24px; }
+  .setup-card{ background:var(--panel);border:1px solid var(--line-strong);border-radius:16px;padding:40px;max-width:460px;width:100%; }
+  .setup-card h1{font-size:26px;margin-bottom:6px;}
+  .setup-card p{color:var(--ink-soft);font-size:14px;line-height:1.5;margin:0 0 20px;}
+  .field{margin-bottom:16px;}
+  .field label{display:block;font-size:13px;color:var(--ink-soft);margin-bottom:6px;}
+  .checkbox-label{display:flex;align-items:center;gap:8px;font-size:13.5px;color:var(--ink);cursor:pointer;margin-bottom:0;}
+  .checkbox-label input{width:16px;height:16px;cursor:pointer;}
+  .field label.child-box{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0;padding:10px 12px;border:1px solid var(--line-strong);border-radius:8px;background:#fff;font-size:14px;font-weight:400;color:var(--ink);cursor:pointer;}
+  .field label.child-box input{width:18px;height:18px;padding:0;margin:0;border:none;flex:0 0 auto;cursor:pointer;accent-color:var(--accent);}
+  #parent-picker{margin-top:12px;}
+  #parent-picker select{width:100%;padding:8px 10px;border:1px solid var(--line-strong);border-radius:8px;font-size:13.5px;color:var(--ink);background:#fff;}
+  .field input{ width:100%;padding:11px 12px;border:1px solid var(--line-strong);border-radius:8px;font-size:14px;background:#fff;color:var(--ink); }
+  .field input:focus{outline:2px solid var(--accent);outline-offset:1px;}
+  .btn-primary{ background:var(--accent);color:#fff;border:none;border-radius:8px;padding:12px 18px;font-size:14px;font-weight:600;width:100%; }
+  .btn-primary:hover{background:var(--accent-dark);}
+  .btn-primary:disabled{background:#B7C4DC;cursor:not-allowed;}
+  .setup-note{font-size:12.5px;color:var(--ink-soft);margin-top:16px;line-height:1.5;}
+
+  /* --- App shell --- */
+  #app{display:none;height:100vh;height:100dvh;min-height:0;flex-direction:column;}
+  header{ background:#E1F4E3;border-bottom:1px solid #A9D3AD;padding:14px 22px;display:flex;align-items:center;gap:16px;flex-wrap:wrap; }
+  header h1{font-size:18px;flex:0 0 auto;}
+  .cal-select{ padding:7px 9px;border:2px solid var(--line-mid);border-radius:8px;background:#fff;font-size:13px;color:var(--ink);min-width:180px; }
+  .secondary-cal-badge{ display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink);background:#fff;border:1px solid var(--line-strong);padding:4px 8px 4px 10px;border-radius:999px;flex:0 0 auto; }
+  .secondary-cal-badge .cal-dot{width:14px;height:14px;border-radius:50%;flex:0 0 auto;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px var(--line-strong);padding:0;}
+  .cal-color-input{position:absolute;width:0;height:0;opacity:0;pointer-events:none;}
+  #extra-cal-badges{display:contents;}
+  .primary-swatch{width:20px;height:20px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 2px var(--line-mid);padding:0;cursor:pointer;flex:0 0 auto;}
+  .secondary-cal-badge button{background:none;border:none;color:var(--ink-soft);font-size:12px;padding:0 2px;cursor:pointer;}
+  .secondary-cal-badge button:hover{color:var(--danger);}
+  .secondary-cal-badge .cal-name-btn{background:none;border:none;font:inherit;color:inherit;cursor:pointer;padding:0;}
+  .secondary-cal-badge.hidden-cal{background:#EEF0F3;color:var(--ink-soft);}
+  .secondary-cal-badge.hidden-cal .cal-name-btn{color:var(--ink-soft);}
+  .secondary-cal-badge.hidden-cal .cal-dot{opacity:.4;}
+  .toolbar{display:flex;gap:8px;align-items:center;margin-left:auto;flex-wrap:wrap;}
+  .btn-group{display:inline-flex;align-items:center;}
+  .btn-group .icon-btn{border-radius:0;margin-left:-2px;position:relative;}
+  .btn-group .icon-btn:first-child{border-radius:8px 0 0 8px;margin-left:0;}
+  .btn-group .icon-btn:last-child{border-radius:0 8px 8px 0;}
+  .btn-group .icon-btn:hover{z-index:1;}
+  .icon-btn{ background:#fff;border:2px solid var(--line-mid);border-radius:8px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-size:15px;color:var(--ink); }
+  .icon-btn:hover{background:var(--accent-soft);border-color:var(--accent);}
+  /* pulsanti toggle attivi: giallo scuro come il giorno di oggi + contorno più spesso */
+  .icon-btn.active, .mini-btn.active{background:var(--today-bg-head);border:2px solid #B38600;color:var(--ink);}
+  /* il sole è giallo: sul giallo non si vedrebbe, quindi il meteo attivo usa un azzurro cielo */
+  #meteo-toggle-btn.active{background:#8EC5FF;border-color:#2F6FB5;}
+  .past-mode-label{display:inline-flex;align-items:center;background:var(--danger);color:#fff;font-size:11px;font-weight:700;letter-spacing:.04em;padding:5px 10px;border-radius:999px;margin-right:2px;}
+  .search-box{display:inline-flex;align-items:center;gap:4px;}
+  .search-input{width:150px;padding:6px 9px;border:2px solid var(--line-mid);border-radius:8px;font-size:13px;color:var(--ink);background:#fff;}
+  .search-input:focus{outline:none;border-color:var(--accent);}
+  .task-row.stripe-a{background:#DCE8FA;}
+  .task-row.stripe-b{background:#FBE3C9;}
+  .task-row.is-paused{background:#ECE9F5;box-shadow:inset 4px 0 0 #7E57C2;color:#6A6480;font-style:italic;}
+  .task-row.is-paused:hover{background:#E1DCF0;}
+  .task-row.pause-last{border-bottom-color:#7E57C2;}
+  .bar.is-paused{background:repeating-linear-gradient(45deg,#C9C4DB,#C9C4DB 6px,#DAD6E9 6px,#DAD6E9 12px) !important;color:#4B4560 !important;border:1px dashed #7E57C2;opacity:.85;}
+  .task-row.search-hit{background:#FF9F43;box-shadow:inset 4px 0 0 #D9480F;font-weight:600;}
+  .task-row.search-hit:hover{background:#FF8A1F;}
+  .btn-add{ background:var(--accent);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600; }
+  .btn-add:hover{background:var(--accent-dark);}
+  #status-banner{ display:none;background:#FBE9E5;color:var(--danger);border-bottom:1px solid #EFC5BC;padding:10px 22px;font-size:13.5px;align-items:center;gap:12px; }
+  #status-banner button{background:var(--danger);color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12.5px;}
+
+  main{flex:1;min-height:0;overflow:hidden;padding:18px;display:flex;flex-direction:column;}
+  .board{ background:var(--panel);border:var(--outline-w) solid var(--outline);border-radius:12px;display:flex;align-items:stretch;flex:0 1 auto;min-height:160px;max-height:calc(100vh - 150px);overflow:hidden; }
+  .board-resize-handle{ flex:0 0 auto;height:12px;width:64px;margin:4px auto 0;border-radius:0 0 8px 8px;background:var(--line-strong);cursor:row-resize;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;letter-spacing:2px;user-select:none; }
+  .board-resize-handle:hover{background:var(--accent);}
+  .board-resize-handle.dragging{background:var(--accent-dark);}
+
+  .task-col{ flex:0 0 220px;display:flex;flex-direction:column;min-height:0; }
+  .task-col .head{ height:120px;flex:0 0 auto;border-bottom:var(--outline-w) solid var(--outline);display:flex;align-items:center;justify-content:space-between;padding:0 10px 0 16px;font-size:12.5px;color:var(--ink-soft);font-weight:600;text-transform:uppercase;letter-spacing:.03em;background:#FAFAFB;gap:8px; }
+  .task-rows-viewport{flex:1;overflow:hidden;position:relative;min-height:0;}
+  .task-rows-inner{position:relative;}
+  .head-fontctl{display:flex;gap:4px;flex:0 0 auto;}
+  .task-col .head > span:first-child{font-size:17px;font-weight:700;color:var(--ink);}
+  .mini-btn{width:24px;height:24px;border:1px solid var(--line-strong);border-radius:6px;background:#fff;font-size:11.5px;font-weight:700;display:flex;align-items:center;justify-content:center;color:var(--ink-soft);text-transform:none;letter-spacing:normal;}
+  .mini-btn:hover{background:var(--accent-soft);border-color:var(--accent);color:var(--ink);}
+  .mini-btn.off{opacity:.4;}
+  .task-row{ min-height:var(--row-h);height:var(--row-h);display:flex;align-items:center;justify-content:space-between;padding:0 14px;border-bottom:1px solid var(--line-mid);font-size:var(--task-font);gap:8px;cursor:pointer; }
+  .task-row .bullet{width:7px;height:7px;border-radius:50%;border:1.5px solid var(--ink-soft);flex:0 0 auto;margin-right:2px;}
+  .toggle-btn{ width:22px;height:22px;border:none;border-radius:50%;background:var(--accent);color:#fff;padding:0;margin:0 6px 0 0;font-size:10.5px;cursor:pointer;flex:0 0 auto;display:flex;align-items:center;justify-content:center;line-height:1;box-shadow:0 1px 2px rgba(32,36,43,.2); }
+  .toggle-btn:hover{background:var(--accent-dark);}
+  .toggle-spacer{width:22px;height:22px;margin:0 6px 0 0;flex:0 0 auto;display:inline-block;}
+  .done-checkbox{ width:16px;height:16px;border-radius:50%;border:1.5px solid var(--ink-soft);flex:0 0 auto;margin:0 6px 0 0;padding:0;cursor:pointer;background:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;color:#fff;line-height:1; }
+  .done-checkbox:hover{border-color:var(--accent);}
+  .done-checkbox.checked{background:var(--accent);border-color:var(--accent);}
+  .task-row.is-done .txt{text-decoration:line-through;color:var(--ink-soft);}
+  .task-row.is-done{opacity:.72;}
+  .bar.is-done{opacity:.55;}
+  .toggle-btn:hover{color:var(--ink);}
+  .task-row .name{flex:1;display:flex;align-items:center;gap:0;overflow:hidden;}
+  .task-row .name .bullet{margin-top:5px;margin-right:6px;}
+  .task-row .name .txt-wrap{overflow:hidden;flex:1;}
+  .task-row .name .txt{ display:block;line-height:1.3;max-height:2.6em;overflow:hidden; }
+  .title-icon{ flex:0 0 auto;margin:0 4px 0 0;line-height:1.3; }
+  .task-row .del{ opacity:0;background:none;border:none;color:var(--ink-soft);font-size:14px;line-height:1;padding:2px 4px;flex:0 0 auto; }
+  .task-row:hover .del{opacity:1;}
+  .task-row .del:hover{color:var(--danger);}
+
+  /* Barra di priorità */
+  .priority-bar{ width:4px;height:16px;border-radius:2px;flex:0 0 auto;margin:0 6px 0 0;display:inline-block; }
+  .priority-bar.high{ background:#D93025; }
+  .priority-bar.medium{ background:#F4B400; }
+  .priority-bar.low{ background:#34C759; }
+
+  .splitter{ flex:0 0 7px;box-sizing:border-box;border-left:var(--outline-w) solid var(--outline);cursor:col-resize;background:transparent;position:relative;align-self:stretch; }
+  .splitter:hover, .splitter.dragging{border-left-color:var(--accent);}
+
+  .timeline-col{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0;}
+  .tl-head-wrap{overflow:hidden;flex:0 0 auto;background:#FAFAFB;box-sizing:border-box;border-bottom:var(--outline-w) solid var(--outline);}
+  .timeline-wrap{flex:1;overflow:auto;position:relative;min-height:0;}
+  .timeline-inner{position:relative;}
+  .tl-month-row{height:22px;display:flex;border-bottom:1px solid var(--line-dark);}
+  .tl-month-cell{ flex:0 0 auto;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--ink);border-right:1px solid rgba(0,0,0,.35);text-transform:capitalize;white-space:nowrap;overflow:hidden; }
+  .tl-month-cell.month-a{background:#E3DFD6;}
+  .tl-month-cell.month-b{background:#F1EEE7;}
+  .tl-week-row{height:26px;display:flex;border-bottom:1px solid var(--line-dark);background:#D7DEE6;}
+  .tl-week-cell{ flex:0 0 auto;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--ink);border-right:1px solid #8493A6;white-space:nowrap;overflow:hidden; }
+  .tl-num-row{height:20px;display:flex;border-bottom:1px solid var(--line-mid);}
+  .tl-num-cell{ flex:0 0 auto;display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:500;color:var(--ink-soft);border-right:1px solid var(--line-mid); }
+  .tl-num-cell.weekend{color:var(--weekend);background:var(--weekend-bg);}
+  .tl-num-cell.today{background:var(--today-bg-head);color:var(--ink);font-weight:700;}
+  .tl-day-row{height:24px;display:flex;border-bottom:1px solid var(--line-dark);}
+  .tl-meteo-row{height:28px;display:flex;border-bottom:1px solid var(--line-dark);background:#EAF4FB;}
+  .tl-meteo-cell{ flex:0 0 auto;display:flex;align-items:center;justify-content:center;font-size:15px;border-right:1px solid var(--line-mid); }
+  .tl-meteo-cell.has-info{cursor:pointer;}
+  .tl-meteo-cell.has-info:hover{background:rgba(60,120,180,.18);}
+  .tl-day-cell{ flex:0 0 auto;display:flex;align-items:center;justify-content:center;font-size:11.5px;font-weight:600;border-right:1px solid var(--line-mid); }
+  .tl-day-cell.weekend{color:var(--weekend);background:var(--weekend-bg);}
+  .tl-day-cell.weekday{color:var(--accent);}
+  .tl-day-cell.today{background:var(--today-bg-head);}
+
+  .tl-rows{position:relative;z-index:2;}
+  .tl-row{height:var(--row-h);position:relative;border-bottom:1px solid var(--line);}
+  .tl-grid-line{position:absolute;top:0;bottom:0;border-right:1px solid var(--line);}
+  .tl-grid-line.week-start{border-right:1px solid var(--line-strong);}
+  .tl-grid-line.weekend{background:var(--weekend-bg);}
+  .tl-grid-line.sat{background:var(--sat-bg);}
+  .tl-grid-line.sun{background:var(--sun-bg);}
+  .tl-num-cell.sat, .tl-day-cell.sat{background:var(--sat-bg);}
+  .tl-num-cell.sun, .tl-day-cell.sun{background:var(--sun-bg);color:var(--weekend);}
+  .tl-num-cell.today, .tl-day-cell.today{background:var(--today-bg-head);}
+  .tl-num-cell.sun.today{color:var(--ink);}
+  .tl-grid-line.today{background:var(--today-bg);}
+
+  .bar.bar-parent{border-radius:3px;opacity:.55;}
+  .bar{ position:absolute;height:var(--bar-h,24px);border-radius:999px;background:var(--accent);
+    display:flex;align-items:center;padding:0 12px;color:#fff;font-size:12px;font-weight:500;
+    box-shadow:0 1px 2px rgba(32,36,43,.15);cursor:grab;user-select:none;white-space:nowrap;overflow:hidden; }
+  .bar.dragging{cursor:grabbing;opacity:.88;box-shadow:0 4px 10px rgba(32,36,43,.25);}
+  .bar.selected{box-shadow:0 0 0 2px #fff, 0 0 0 4px var(--accent-dark);}
+  .bar .handle{position:absolute;top:0;bottom:0;width:9px;cursor:ew-resize;}
+  .bar .handle.left{left:0;}
+  .bar .handle.right{right:0;}
+
+  .empty-state{padding:60px 24px;text-align:center;color:var(--ink-soft);}
+  .empty-state h2{font-size:17px;margin-bottom:8px;color:var(--ink);}
+
+  .overlay{ display:none;position:fixed;inset:0;background:rgba(32,36,43,.35);align-items:center;justify-content:center;z-index:50;padding:20px; }
+  .modal{ background:var(--panel);border-radius:14px;padding:28px;max-width:380px;width:100%; }
+
+  .meteo-modal{max-width:360px;}
+  .meteo-modal-topbar{display:flex;justify-content:flex-end;margin:-10px -10px 2px 0;}
+  .modal-x{background:none;border:none;font-size:15px;color:var(--ink-soft);cursor:pointer;padding:4px 6px;line-height:1;border-radius:6px;}
+  .modal-x:hover{color:var(--ink);background:var(--accent-soft);}
+  .meteo-modal-title{display:flex;align-items:center;gap:10px;font-size:19px;font-weight:500;color:var(--ink);margin-bottom:8px;}
+  .meteo-modal-dot{width:12px;height:12px;border-radius:3px;background:#3F6FBF;flex:0 0 auto;}
+  .meteo-modal-icon{font-size:22px;line-height:1;}
+  .meteo-modal-date{font-size:14px;color:var(--ink);margin:0 0 14px 22px;}
+  .meteo-modal-location{font-size:13.5px;color:var(--ink-soft);margin:0 0 12px 22px;}
+  .meteo-modal-location:empty{display:none;}
+  .meteo-modal-desc{font-size:13px;color:var(--ink-soft);white-space:pre-line;line-height:1.6;margin:0 0 16px 22px;max-height:60vh;overflow-y:auto;}
+  .meteo-modal-footer{font-size:13px;color:var(--ink-soft);margin-left:22px;}
+  .modal h2{font-size:18px;margin-bottom:18px;}
+  .modal.help-modal{max-width:640px;max-height:86vh;overflow:auto;position:relative;}
+  .help-modal h2{margin-bottom:6px;}
+  .help-modal h2.help-title{font-size:22px;font-weight:700;margin-bottom:8px;}
+  .help-desc{font-size:13.5px;line-height:1.5;color:var(--ink-soft);margin:0 28px 14px 0;}
+  .help-modal h2.help-legend-title{font-size:16px;font-weight:700;margin:22px 0 0;}
+  .help-close{position:absolute;top:14px;right:16px;background:none;border:none;font-size:20px;color:var(--ink-soft);cursor:pointer;}
+  .help-modal h3{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);margin:20px 0 8px;padding-bottom:4px;border-bottom:1px solid var(--line-mid);}
+  .help-row{display:flex;align-items:center;gap:12px;padding:5px 0;font-size:13.5px;}
+  .help-icon{flex:0 0 96px;display:flex;align-items:center;justify-content:center;gap:4px;min-height:26px;font-size:14px;color:var(--ink);white-space:nowrap;}
+  .help-icon .hi{display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;padding:0 5px;border:1px solid var(--line-strong);border-radius:6px;background:#fff;font-size:12.5px;font-weight:600;}
+  .help-text{flex:1;line-height:1.4;}
+  .modal .row2{display:flex;gap:10px;}
+  .modal .row2 .field{flex:1;}
+  .modal-actions{display:flex;gap:10px;margin-top:6px;}
+  .btn-secondary{ background:#fff;border:1px solid var(--line-strong);border-radius:8px;padding:11px 16px;font-size:13.5px;color:var(--ink);flex:1; }
+  .btn-secondary:hover{background:var(--accent-soft);}
+
+  /* --- Context menu e sottomenu a cascata --- */
+  #bar-tip{position:fixed;z-index:200;display:none;max-width:420px;background:#20242B;color:#fff;font-size:13px;line-height:1.35;padding:8px 12px;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.3);pointer-events:none;white-space:normal;overflow-wrap:anywhere;}
+  .ctx-menu{ display:none;position:fixed;background:var(--panel);border:1px solid var(--line-strong);border-radius:8px;box-shadow:0 6px 18px rgba(32,36,43,.18);padding:4px;z-index:100;min-width:180px; }
+  .ctx-menu button{ display:block;width:100%;text-align:left;background:none;border:none;padding:9px 12px;font-size:13px;color:var(--ink);border-radius:6px; }
+  .ctx-menu button:hover{background:var(--accent-soft);}
+  .ctx-menu button.danger:hover{background:#FBE9E5;color:var(--danger);}
+  .ctx-menu .ctx-title{padding:6px 12px 4px;font-size:11px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em;}
+  .ctx-menu button:disabled{color:var(--ink-soft);cursor:default;}
+  .ctx-menu button:disabled:hover{background:none;}
+  .ctx-menu .sq{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:8px;vertical-align:baseline;}
+
+  .ctx-menu .menu-item {
+    position: relative;
+    padding: 8px 12px;
+    font-size: 13px;
+    color: var(--ink);
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .ctx-menu .menu-item:hover { background: var(--accent-soft); }
+  .ctx-menu .submenu {
+    display: none;
+    position: absolute;
+    left: 100%;
+    top: -4px;
+    background: var(--panel);
+    border: 1px solid var(--line-strong);
+    border-radius: 8px;
+    box-shadow: 0 6px 18px rgba(32,36,43,.18);
+    padding: 4px;
+    min-width: 160px;
+    z-index: 105;
+  }
+  .ctx-menu .menu-item:hover > .submenu { display: block; }
+  .ctx-menu .submenu.open-left { left: auto; right: 100%; }
+  .ctx-menu .submenu.open-up { top: auto; bottom: -4px; }
+
+  .prio-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; vertical-align: middle; }
+  .prio-dot.high { background: #D93025; }
+  .prio-dot.medium { background: #F4B400; }
+  .prio-dot.low { background: #34C759; }
+
+  .cal-square{width:10px;height:10px;border-radius:2px;flex:0 0 auto;}
+  .row-right{display:flex;align-items:center;gap:8px;flex:0 0 auto;}
+  .debug-btn{background:none;border:none;font-size:12px;padding:2px;cursor:pointer;opacity:.5;flex:0 0 auto;}
+  .debug-btn:hover{opacity:1;}
+  body:not(.debug-on) .debug-btn{display:none;}
+  #dbg-panel{position:fixed;right:10px;bottom:10px;width:520px;max-width:92vw;height:320px;z-index:9999;background:#12161c;color:#d6e2ee;border:1px solid #394350;border-radius:8px;display:flex;flex-direction:column;box-shadow:0 6px 24px rgba(0,0,0,.35);font:11px/1.45 ui-monospace,Menlo,Consolas,monospace;}
+  body:not(.debug-on) #dbg-panel{display:none;}
+  #dbg-panel .dbg-head{display:flex;align-items:center;gap:6px;padding:5px 8px;border-bottom:1px solid #394350;font-weight:700;}
+  #dbg-panel .dbg-head span{flex:1;}
+  #dbg-panel .dbg-head button{background:#27303b;color:#d6e2ee;border:1px solid #455062;border-radius:4px;font-size:11px;padding:2px 8px;cursor:pointer;}
+  #dbg-body{flex:1;overflow:auto;padding:6px 8px;white-space:pre-wrap;word-break:break-all;}
+  #dbg-body .l-err{color:#ff7b72;} #dbg-body .l-warn{color:#f0c040;} #dbg-body .l-ok{color:#7ee787;} #dbg-body .l-step{color:#79c0ff;}
+</style>
+</head>
+<body>
+
+<div id="setup">
+  <div class="setup-card">
+    <h1>Il tuo Gantt</h1>
+    <p>Collegato direttamente al tuo Google Calendar. Nessun server intermedio: i dati viaggiano solo tra questo browser e Google.</p>
+    <div class="field">
+      <label for="client-id-input">Client ID OAuth di Google</label>
+      <input id="client-id-input" type="text" placeholder="xxxxxxxx.apps.googleusercontent.com">
+    </div>
+    <button class="btn-primary" id="save-client-id">Continua</button>
+    <p class="setup-note">Non hai ancora un Client ID? Segui i passaggi che Claude ti ha indicato per crearne uno gratis su Google Cloud Console. Viene salvato solo in questo browser, mai inviato altrove.</p>
+  </div>
+</div>
+
+<div id="app">
+  <div id="status-banner"><span id="status-text"></span><button id="reconnect-btn">Riconnetti</button></div>
+  <header>
+    <h1>Gantt</h1>
+    <select id="cal-select" class="cal-select"></select>
+    <button class="primary-swatch" id="primary-swatch" title="Colore delle barre del calendario principale"></button>
+    <span id="extra-cal-badges"></span>
+    <input type="color" class="cal-color-input" id="cal-color-input">
+    <div class="toolbar">
+      <span class="search-box">
+        <input type="text" id="search-input" class="search-input" placeholder="Cerca negli eventi...">
+        <button class="icon-btn" id="search-btn" title="Cerca">🔍</button>
+        <button class="icon-btn" id="search-clear-btn" title="Togli evidenziazione" style="display:none;">✕</button>
+      </span>
+      <span class="past-mode-label" id="past-mode-label" style="display:none;">ULTIMI DUE ANNI</span>
+      <button class="icon-btn" id="toggle-past-btn" title="Mostra anche eventi passati (fino a 2 anni fa)">⏪</button>
+      <span class="btn-group">
+        <button class="icon-btn" id="zoom-out-btn" title="Riduci zoom">−</button>
+        <button class="icon-btn" id="zoom-in-btn" title="Aumenta zoom">+</button>
+        <button class="icon-btn" id="rowh-minus-btn" title="Righe più basse">⬍−</button>
+        <button class="icon-btn" id="rowh-plus-btn" title="Righe più alte">⬍+</button>
+      </span>
+      <span class="btn-group">
+        <button class="icon-btn" id="first-event-btn" title="Vai al primo evento della lista">⏫</button>
+        <button class="icon-btn" id="prev-btn" title="Indietro">←</button>
+        <button class="icon-btn" id="today-btn" title="Oggi">●</button>
+        <button class="icon-btn" id="next-btn" title="Avanti">→</button>
+        <button class="icon-btn" id="last-event-btn" title="Vai all'ultimo evento della lista">⏬</button>
+      </span>
+      <button class="icon-btn" id="help-btn" title="Legenda dei pulsanti">❓</button>
+      <button class="icon-btn" id="debug-toggle-btn" title="Attiva/disattiva la modalità debug">🐞</button>
+      <button class="btn-add" id="new-task-btn">+ Nuovo task</button>
+    </div>
+  </header>
+  <main>
+    <div class="board" id="board">
+      <div class="task-col" id="task-col">
+        <div class="head">
+          <span>Attività</span>
+          <span class="head-fontctl">
+            <button class="mini-btn" id="add-calendar-btn" title="Aggiungi/togli calendari extra da mostrare insieme">📅+</button>
+            <button class="mini-btn" id="meteo-toggle-btn" title="Mostra/nascondi riga meteo">☀️</button>
+            <button class="mini-btn" id="prio-filter-btn" title="Mostra solo gli eventi con una priorità">🚨</button>
+            <button class="mini-btn" id="pause-filter-btn" title="Nascondi gli eventi in pausa">⏸️</button>
+            <button class="mini-btn" id="toggle-recent-btn" title="Nasconde gli eventi passati a medio termine: mostra solo da 7 giorni fa in avanti">⏩</button>
+            <button class="mini-btn" id="stripe-toggle-btn" title="Colora a strisce le attività che iniziano lo stesso giorno">▦</button>
+            <button class="mini-btn" id="font-minus" title="Rimpicciolisci testo">A-</button>
+            <button class="mini-btn" id="font-plus" title="Ingrandisci testo">A+</button>
+          </span>
+        </div>
+        <div class="task-rows-viewport" id="task-rows-viewport">
+          <div class="task-rows-inner" id="task-rows-inner"></div>
+        </div>
+      </div>
+      <div class="splitter" id="splitter"></div>
+      <div class="timeline-col">
+        <div class="tl-head-wrap" id="tl-head-wrap">
+          <div class="tl-head-inner" id="tl-head-inner"></div>
+        </div>
+        <div class="timeline-wrap" id="timeline-wrap">
+          <div class="timeline-inner" id="timeline-inner"></div>
+        </div>
+      </div>
+    </div>
+    <div class="board-resize-handle" id="board-resize-handle" title="Trascina per ridimensionare l'altezza, doppio click per ripristinare">⋯</div>
+  </main>
+</div>
+
+<div class="overlay" id="modal-overlay">
+  <div class="modal">
+    <h2 id="modal-heading">Nuovo evento</h2>
+    <div class="field">
+      <label>Titolo</label>
+      <input type="text" id="new-title" placeholder="Es. Bozza slide">
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label>Inizio</label>
+        <input type="date" id="new-start">
+      </div>
+      <div class="field">
+        <label>Fine</label>
+        <input type="date" id="new-end">
+      </div>
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label>Ora inizio <span style="opacity:.65">(facoltativa)</span></label>
+        <input type="time" id="new-start-time">
+      </div>
+      <div class="field">
+        <label>Ora fine <span style="opacity:.65">(facoltativa)</span></label>
+        <input type="time" id="new-end-time">
+      </div>
+    </div>
+    <div style="font-size:12px;color:var(--ink-soft);margin:-8px 0 16px;">Orari vuoti = tutto il giorno. Con solo l'ora di inizio, la fine è un'ora dopo.</div>
+    <div class="field" id="independent-field">
+      <label class="child-box">
+        <span>Evento figlio</span>
+        <input type="checkbox" id="new-child">
+      </label>
+      <div id="parent-picker" style="display:none;">
+        <label>Figlio di</label>
+        <select id="new-parent-select"></select>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" id="cancel-new">Annulla</button>
+      <button class="btn-primary" id="confirm-new">Crea</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="meteo-overlay">
+  <div class="modal meteo-modal">
+    <div class="meteo-modal-topbar">
+      <button class="modal-x" id="meteo-modal-close" title="Chiudi">✕</button>
+    </div>
+    <div class="meteo-modal-title">
+      <span class="meteo-modal-dot"></span>
+      <span class="meteo-modal-icon" id="meteo-modal-icon"></span>
+      <span class="meteo-modal-temp" id="meteo-modal-temp"></span>
+    </div>
+    <div class="meteo-modal-date" id="meteo-modal-date"></div>
+    <div class="meteo-modal-location" id="meteo-modal-location"></div>
+    <div class="meteo-modal-desc" id="meteo-modal-desc"></div>
+    <div class="meteo-modal-footer">📅 METEO</div>
+  </div>
+</div>
+
+<div class="ctx-menu" id="cal-add-menu"></div>
+<div class="ctx-menu" id="move-menu"></div>
+
+<div class="overlay" id="help-overlay">
+  <div class="modal help-modal" id="help-modal"></div>
+</div>
+<div class="ctx-menu" id="ctx-menu">
+  <button id="ctx-new">＋ Nuovo evento qui</button>
+  <button id="ctx-color">🎨 Cambia colore</button>
+  <button id="ctx-delete" class="danger">🗑️ Elimina evento</button>
+</div>
+<input type="color" id="color-input" style="position:fixed;width:1px;height:1px;opacity:0;border:none;padding:0;">
+
+<script>
+(function(){
+  "use strict";
+
+  const DAY_MS = 86400000;
+  let COL_W = parseInt(localStorage.getItem("gcal_gantt_col_w")) || 34;
+  const COL_W_MIN = 10, COL_W_MAX = 130;
+  let ROW_H = parseInt(localStorage.getItem("gcal_gantt_row_h")) || 56;
+  const ROW_H_MIN = 22, ROW_H_MAX = 100;
+  function barHeightFor(rowH){ return Math.max(14, Math.min(24, rowH - 12)); }
+  const NUM_DAYS_FUTURE_ONLY = 1834; // 262 full Mon-Sun weeks ≈ 5 anni in avanti
+  const RECENT_PAST_DAYS = 30;     // nella versione normale la timeline parte da circa 30 giorni fa
+  const PAST_EXTENSION_DAYS = 730; // ~2 anni aggiuntivi indietro, solo se "mostra eventi passati" è attivo
+  let NUM_DAYS = NUM_DAYS_FUTURE_ONLY;
+  const SCOPE = "https://www.googleapis.com/auth/calendar";
+  const API = "https://www.googleapis.com/calendar/v3";
+
+  let clientId = localStorage.getItem("gcal_gantt_client_id") || "";
+  let calendarId = localStorage.getItem("gcal_gantt_calendar_id") || "";
+  const CAL_PALETTE = ["#2E9E5B","#E8710A","#9334E6","#D93025","#00897B","#C2185B","#5D4037","#455A64"];
+  let extraCalendarIds = [];   // calendari extra mostrati insieme a quello principale
+  let hiddenCalendarIds = new Set(); // calendari extra temporaneamente nascosti (restano tra quelli aggiunti)
+  try{ hiddenCalendarIds = new Set(JSON.parse(localStorage.getItem("gcal_gantt_hidden_calendars") || "[]")); }catch(e){}
+  let calColors = {};          // id calendario -> colore barre
+  try{ extraCalendarIds = JSON.parse(localStorage.getItem("gcal_gantt_extra_calendars") || "[]"); }catch(e){}
+  try{ calColors = JSON.parse(localStorage.getItem("gcal_gantt_cal_colors") || "{}"); }catch(e){}
+  (function migrateOldSecondary(){
+    const old = localStorage.getItem("gcal_gantt_secondary_calendar_id");
+    if(old){
+      if(!extraCalendarIds.includes(old)) extraCalendarIds.push(old);
+      if(!calColors[old]) calColors[old] = "#2E9E5B";
+      localStorage.removeItem("gcal_gantt_secondary_calendar_id");
+      localStorage.setItem("gcal_gantt_extra_calendars", JSON.stringify(extraCalendarIds));
+      localStorage.setItem("gcal_gantt_cal_colors", JSON.stringify(calColors));
+    }
+  })();
+  let availableCalendars = [];
+  let accessToken = null;
+  let tokenClient = null;
+  let events = [];
+  let meteoByDate = {};
+  let meteoVisible = localStorage.getItem("gcal_gantt_meteo_visible") !== "false";
+  let stripeByStart = localStorage.getItem("gcal_gantt_stripe") === "true";
+  let onlyWithPriority = localStorage.getItem("gcal_gantt_only_priority") === "true";
+  let hidePaused = localStorage.getItem("gcal_gantt_hide_paused") === "true";
+  let showPastEvents = localStorage.getItem("gcal_gantt_show_past") === "true";
+  let recentOnly = false;   // toggle temporaneo ⏩: nasconde gli eventi più vecchi di 7 giorni (non viene ricordato)
+  let collapsedGroups = new Set();
+  let selectedIds = new Set();
+  let searchHighlightIds = null; // null = nessuna ricerca attiva, Set = id degli eventi trovati
+  let viewStart = null;
+  let dragState = null;
+
+  function buildDisplayList(){
+    const groups = {};
+    const ungrouped = [];
+    const visible = events.filter(t => !hiddenCalendarIds.has(t.calId) && (!onlyWithPriority || t.priority) && !(hidePaused && t.paused) && !isOlderThanRecentLimit(t));
+    // gli eventi in pausa vanno tutti in cima (righe singole, ordinate per data), fuori dai gruppi
+    const pausedEntries = visible.filter(t => t.paused).sort((a,b) => a.start - b.start)
+      .map(t => ({ task:t, isChild:false, hasChildren:false, groupId:t.groupId }));
+    if(pausedEntries.length) pausedEntries[pausedEntries.length - 1].pauseLast = true;
+    visible.filter(t => !t.paused).forEach(t => {
+      if(t.groupId){
+        if(!groups[t.groupId]) groups[t.groupId] = { parent:null, children:[] };
+        if(t.role === "parent") groups[t.groupId].parent = t;
+        else groups[t.groupId].children.push(t);
+      } else {
+        ungrouped.push(t);
+      }
+    });
+    let roots = ungrouped.slice();
+    Object.values(groups).forEach(g => {
+      if(g.parent){ roots.push(g.parent); }
+      else { g.children.forEach(c => roots.push(c)); } // orphan children: no parent found, show flat
+    });
+    roots.sort((a,b) => a.start - b.start);
+
+    const display = [];
+    roots.forEach(r => {
+      const g = r.groupId ? groups[r.groupId] : null;
+      const isRealParent = !!(g && g.parent === r && g.children.length);
+      display.push({ task:r, isChild:false, hasChildren:isRealParent, groupId:r.groupId });
+      if(isRealParent && !collapsedGroups.has(r.groupId)){
+        g.children.slice().sort((a,b) => a.start - b.start).forEach(c => {
+          display.push({ task:c, isChild:true, hasChildren:false, groupId:r.groupId, parentColor:r.color || null });
+        });
+      }
+    });
+    return pausedEntries.concat(display);
+  }
+
+  // ---------- date helpers ----------
+  function startOfDay(d){ const x = new Date(d); x.setHours(0,0,0,0); return x; }
+  function addDays(d, n){ return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n); }
+  function mondayOf(d){
+    const day = d.getDay(); // 0 Sun..6 Sat
+    const diff = (day === 0) ? -6 : (1 - day);
+    return addDays(startOfDay(d), diff);
+  }
+  function fmtISO(d){
+    const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,"0"), day=String(d.getDate()).padStart(2,"0");
+    return `${y}-${m}-${day}`;
+  }
+  function parseISO(s){ const [y,m,d]=s.split("-").map(Number); return new Date(y, m-1, d); }
+  function daysBetween(a,b){ return Math.round((startOfDay(b)-startOfDay(a))/DAY_MS); }
+
+  // con il toggle ⏩ attivo si vedono solo gli eventi che toccano gli ultimi 7 giorni (da oggi - 7 in avanti)
+  function isOlderThanRecentLimit(t){
+    return recentOnly && t.end <= addDays(startOfDay(new Date()), -7);
+  }
+
+  // ---------- intervallo date mostrato (dipende dal toggle "eventi passati") ----------
+  function applyDateRangeForMode(){
+    const recentStart = mondayOf(addDays(new Date(), -(recentOnly ? 7 : RECENT_PAST_DAYS))); // da circa 30 giorni fa in avanti (7 con il toggle ⏩)
+    if(showPastEvents){
+      const pastStart = mondayOf(addDays(new Date(), -(PAST_EXTENSION_DAYS + 7)));
+      const extraDays = daysBetween(pastStart, recentStart);
+      viewStart = pastStart;
+      NUM_DAYS = NUM_DAYS_FUTURE_ONLY + extraDays;
+    } else {
+      viewStart = recentStart;
+      NUM_DAYS = NUM_DAYS_FUTURE_ONLY;
+    }
+  }
+  applyDateRangeForMode();
+  const DOW_LETTER = ["d","l","m","m","g","v","s"]; // index = getDay(): 0 dom..6 sab
+  const MONTHS = ["gen","feb","mar","apr","mag","giu","lug","ago","set","ott","nov","dic"];
+  const MONTHS_FULL = ["gennaio","febbraio","marzo","aprile","maggio","giugno","luglio","agosto","settembre","ottobre","novembre","dicembre"];
+
+  // ---------- setup screen ----------
+  const setupEl = document.getElementById("setup");
+  const appEl = document.getElementById("app");
+  const clientIdInput = document.getElementById("client-id-input");
+  if(clientId){ clientIdInput.value = clientId; }
+
+  document.getElementById("save-client-id").addEventListener("click", () => {
+    const val = clientIdInput.value.trim();
+    if(!val){ clientIdInput.focus(); return; }
+    clientId = val;
+    if(localStorage.getItem("gcal_gantt_client_id") !== clientId){
+      if(confirm("Vuoi salvare il Client ID in questo browser?\n\nOK = salvato, non te lo chiederò più\nAnnulla = usato solo per questa volta")){
+        localStorage.setItem("gcal_gantt_client_id", clientId);
+      }
+    }
+    initGoogle();
+  });
+
+  function initGoogle(){
+    setupEl.style.display = "none";
+    appEl.style.display = "flex";
+    waitForGis(() => {
+      tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: clientId,
+        scope: SCOPE,
+        callback: onToken
+      });
+      tokenClient.requestAccessToken({ prompt: "" });
+    });
+  }
+
+  function waitForGis(cb, tries){
+    tries = tries || 0;
+    if(window.google && google.accounts && google.accounts.oauth2){ cb(); }
+    else if(tries < 100){ setTimeout(() => waitForGis(cb, tries+1), 100); }
+    else { showStatus("Impossibile caricare Google Identity Services. Controlla la connessione."); }
+  }
+
+  function onToken(resp){
+    if(resp.error){
+      showStatus("Accesso negato o annullato. Clicca Riconnetti per riprovare.");
+      return;
+    }
+    accessToken = resp.access_token;
+    hideStatus();
+    loadCalendars();
+    loadMeteo();
+  }
+
+  document.getElementById("reconnect-btn").addEventListener("click", () => {
+    tokenClient.requestAccessToken({ prompt: "consent" });
+  });
+
+  function showStatus(msg){
+    document.getElementById("status-text").textContent = msg;
+    document.getElementById("status-banner").style.display = "flex";
+  }
+  function hideStatus(){ document.getElementById("status-banner").style.display = "none"; }
+
+  // ---------- pannello di debug (visibile con il pulsante 🐞 in alto) ----------
+  var dbgBuffer = [];
+  var dbgBody = null;
+  function dlog(msg, level){
+    const d = new Date();
+    const ts = String(d.getMinutes()).padStart(2,"0")+":"+String(d.getSeconds()).padStart(2,"0")+"."+String(d.getMilliseconds()).padStart(3,"0");
+    const line = { ts, msg, level: level || "" };
+    dbgBuffer.push(line);
+    if(dbgBuffer.length > 600) dbgBuffer.shift();
+    if(dbgBody) appendDbgLine(line);
+  }
+  function appendDbgLine(line){
+    const div = document.createElement("div");
+    if(line.level) div.className = "l-" + line.level;
+    div.textContent = line.ts + "  " + line.msg;
+    dbgBody.appendChild(div);
+    dbgBody.scrollTop = dbgBody.scrollHeight;
+  }
+  (function buildDbgPanel(){
+    const panel = document.createElement("div");
+    panel.id = "dbg-panel";
+    panel.innerHTML = '<div class="dbg-head"><span id="dbg-title">🐞 Log debug</span><button id="dbg-backup" title="Salva in un file le proprietà Gantt di tutti gli eventi">💾 Backup</button><button id="dbg-restore" title="Ripristina le proprietà Gantt da un file di backup">♻️ Ripristina</button><button id="dbg-clear">Svuota</button></div><div id="dbg-body"></div><input type="file" id="dbg-file" accept=".json,application/json" style="display:none">';
+    document.body.appendChild(panel);
+    dbgBody = panel.querySelector("#dbg-body");
+    dbgBuffer.forEach(appendDbgLine);
+    const fileInput = panel.querySelector("#dbg-file");
+    panel.querySelector("#dbg-backup").addEventListener("click", () => backupGanttProps());
+    panel.querySelector("#dbg-restore").addEventListener("click", () => fileInput.click());
+    fileInput.addEventListener("change", () => {
+      if(fileInput.files && fileInput.files[0]) restoreGanttProps(fileInput.files[0]);
+      fileInput.value = "";
+    });
+    panel.querySelector("#dbg-clear").addEventListener("click", () => { dbgBuffer = []; dbgBody.innerHTML = ""; });
+  })();
+  function describeTask(t){
+    const r = t.raw || {};
+    return `#${String(t.id).slice(0,14)} "${t.title}" | cal=${t.calId}\n` +
+      `   start(Google)=${JSON.stringify(r.start)} end(Google)=${JSON.stringify(r.end)}\n` +
+      `   ricorrente=${r.recurringEventId ? "SÌ ("+String(r.recurringEventId).slice(0,14)+")" : "no"} tipo=${r.eventType || "-"} colorId=${t.colorId || "-"} ruolo=${t.role || "-"} gruppo=${t.groupId ? String(t.groupId).slice(0,10) : "-"}`;
+  }
+
+  // ---------- API wrapper ----------
+  async function gapi(method, path, body){
+    const isWrite = method !== "GET";
+    const t0 = performance.now();
+    if(isWrite) dlog(`→ ${method} ${decodeURIComponent(path).slice(0,110)}\n   body=${JSON.stringify(body)}`, "step");
+    const res = await fetch(API + path, {
+      method,
+      headers: { "Authorization": "Bearer " + accessToken, "Content-Type": "application/json" },
+      body: body ? JSON.stringify(body) : undefined
+    });
+    const ms = Math.round(performance.now() - t0);
+    if(res.status === 401){
+      dlog(`← 401 sessione scaduta (${ms} ms)`, "err");
+      showStatus("Sessione scaduta. Clicca Riconnetti per continuare.");
+      throw new Error("unauthorized");
+    }
+    if(!res.ok){
+      const t = await res.text();
+      dlog(`← ${res.status} ERRORE da Google (${ms} ms): ${t.slice(0,400)}`, "err");
+      throw new Error("API error " + res.status + ": " + t);
+    }
+    if(isWrite) dlog(`← ${res.status} OK (${ms} ms)`, "ok");
+    if(res.status === 204) return null;
+    return res.json();
+  }
+
+  // ---------- giorni festivi (calendario "FESTE_ITALIA") ----------
+  let holidayDates = new Set();
+  let holidayCalId; // undefined = non ancora cercato, null = non esiste
+  async function loadHolidays(){
+    try{
+      if(holidayCalId === undefined){
+        const listData = await gapi("GET", "/users/me/calendarList");
+        const cal = (listData.items || []).find(c => ((c.summaryOverride || c.summary) || "").trim().toLowerCase() === "feste_italia");
+        holidayCalId = cal ? cal.id : null;
+      }
+      if(!holidayCalId) return new Set();
+      const timeMin = viewStart.toISOString();
+      const timeMax = addDays(viewStart, NUM_DAYS).toISOString();
+      const set = new Set();
+      let pageToken;
+      do{
+        const qs = new URLSearchParams({ singleEvents:"true", maxResults:"2500", timeMin, timeMax });
+        if(pageToken) qs.set("pageToken", pageToken);
+        const data = await gapi("GET", `/calendars/${encodeURIComponent(holidayCalId)}/events?${qs.toString()}`);
+        (data.items || []).forEach(ev => {
+          if(ev.status === "cancelled" || !ev.start) return;
+          let a, b;
+          if(ev.start.date){ a = parseISO(ev.start.date); b = parseISO(ev.end.date); }
+          else if(ev.start.dateTime){ a = startOfDay(new Date(ev.start.dateTime)); b = addDays(a, 1); }
+          else return;
+          for(let d = a; d < b; d = addDays(d, 1)) set.add(fmtISO(d));
+        });
+        pageToken = data.nextPageToken;
+      } while(pageToken);
+      return set;
+    }catch(e){ console.error("Caricamento festività non riuscito:", e); return new Set(); }
+  }
+  // "sat" = sabato, "sun" = domenica o giorno festivo, "" = giorno normale
+  function dayKind(d){
+    if(d.getDay() === 0 || holidayDates.has(fmtISO(d))) return "sun";
+    if(d.getDay() === 6) return "sat";
+    return "";
+  }
+
+  async function loadMeteo(){
+    try{
+      const listData = await gapi("GET", "/users/me/calendarList");
+      const meteoCal = (listData.items || []).find(c => {
+        const name = ((c.summaryOverride || c.summary) || "").trim().toLowerCase();
+        return name === "meteo";
+      });
+      if(!meteoCal){ meteoByDate = {}; return; }
+      const timeMin = addDays(new Date(), -1).toISOString();
+      const timeMax = addDays(new Date(), 16).toISOString();
+      const qs = new URLSearchParams({ singleEvents:"true", orderBy:"startTime", maxResults:"60", timeMin, timeMax });
+      const data = await gapi("GET", `/calendars/${encodeURIComponent(meteoCal.id)}/events?${qs.toString()}`);
+      const map = {};
+      (data.items || []).forEach(ev => {
+        if(!ev.summary) return;
+        let iso = null;
+        if(ev.start && ev.start.date) iso = ev.start.date;
+        else if(ev.start && ev.start.dateTime) iso = fmtISO(new Date(ev.start.dateTime));
+        if(!iso) return;
+        const chars = Array.from(ev.summary.trim());
+        const icon = chars[0] || "";
+        const tempText = chars.slice(1).join("").trim();
+        map[iso] = { icon, tempText, description: ev.description || "", location: ev.location || "" };
+      });
+      meteoByDate = map;
+      render();
+    }catch(e){ console.error("Caricamento meteo non riuscito:", e); }
+  }
+
+  // ---------- calendars ----------
+  const calSelect = document.getElementById("cal-select");
+
+  async function loadCalendars(){
+    try{
+      const data = await gapi("GET", "/users/me/calendarList?minAccessRole=writer");
+      const cals = (data.items || []).filter(c => !c.deleted);
+      availableCalendars = cals.map(c => ({ id:c.id, name:(c.summaryOverride || c.summary || c.id) + (c.primary ? " (principale)" : "") }));
+      calSelect.innerHTML = "";
+      cals.forEach(c => {
+        const opt = document.createElement("option");
+        opt.value = c.id;
+        opt.textContent = c.summary + (c.primary ? " (principale)" : "");
+        calSelect.appendChild(opt);
+      });
+      if(calendarId && cals.some(c => c.id === calendarId)){
+        calSelect.value = calendarId;
+      } else if(cals.length){
+        calendarId = cals[0].id;
+        calSelect.value = calendarId;
+      }
+      localStorage.setItem("gcal_gantt_calendar_id", calendarId);
+      extraCalendarIds = extraCalendarIds.filter(id => id !== calendarId && availableCalendars.some(c => c.id === id));
+      saveCalSettings();
+      renderCalendarBadges();
+      loadEvents();
+    }catch(e){ console.error(e); }
+  }
+
+  calSelect.addEventListener("change", () => {
+    calendarId = calSelect.value;
+    localStorage.setItem("gcal_gantt_calendar_id", calendarId);
+    extraCalendarIds = extraCalendarIds.filter(id => id !== calendarId);
+    saveCalSettings();
+    renderCalendarBadges();
+    selectedIds.clear();
+    loadEvents();
+  });
+
+  // ---------- calendari extra (mostrati insieme a quello principale, ognuno con il suo colore) ----------
+  function saveCalSettings(){
+    localStorage.setItem("gcal_gantt_extra_calendars", JSON.stringify(extraCalendarIds));
+    localStorage.setItem("gcal_gantt_cal_colors", JSON.stringify(calColors));
+  }
+  function calName(id){
+    const c = availableCalendars.find(c => c.id === id);
+    return c ? c.name : id;
+  }
+  function defaultColorFor(id){
+    const used = new Set(Object.values(calColors));
+    return CAL_PALETTE.find(c => !used.has(c)) || CAL_PALETTE[extraCalendarIds.length % CAL_PALETTE.length];
+  }
+  const calColorInput = document.getElementById("cal-color-input");
+  let colorTargetCalId = null;
+  function pickCalendarColor(calId, currentColor){
+    colorTargetCalId = calId;
+    calColorInput.value = currentColor || "#3B78E7";
+    calColorInput.click();
+  }
+  calColorInput.addEventListener("input", () => {
+    if(!colorTargetCalId) return;
+    calColors[colorTargetCalId] = calColorInput.value;
+    saveCalSettings();
+    renderCalendarBadges();
+    render();
+  });
+  const primarySwatch = document.getElementById("primary-swatch");
+  primarySwatch.addEventListener("click", (e) => {
+    e.stopPropagation();
+    pickCalendarColor(calendarId, calColors[calendarId] || "#3B78E7");
+  });
+  function renderCalendarBadges(){
+    primarySwatch.style.background = calColors[calendarId] || "var(--accent)";
+    const box = document.getElementById("extra-cal-badges");
+    box.innerHTML = "";
+    extraCalendarIds.forEach(id => {
+      const badge = document.createElement("span");
+      badge.className = "secondary-cal-badge";
+      const dot = document.createElement("button");
+      dot.className = "cal-dot";
+      dot.style.background = calColors[id] || "#2E9E5B";
+      dot.title = "Cambia colore delle barre di questo calendario";
+      dot.addEventListener("click", (e) => { e.stopPropagation(); pickCalendarColor(id, calColors[id]); });
+      const isHidden = hiddenCalendarIds.has(id);
+      badge.classList.toggle("hidden-cal", isHidden);
+      const label = document.createElement("button");
+      label.className = "cal-name-btn";
+      label.textContent = calName(id);
+      label.title = isHidden ? "Mostra questo calendario" : "Nascondi questo calendario (resta tra quelli aggiunti)";
+      label.addEventListener("click", (e) => { e.stopPropagation(); toggleCalendarVisibility(id); });
+      const rm = document.createElement("button");
+      rm.textContent = "✕";
+      rm.title = "Togli questo calendario";
+      rm.addEventListener("click", (e) => { e.stopPropagation(); toggleExtraCalendar(id); });
+      badge.appendChild(dot); badge.appendChild(label); badge.appendChild(rm);
+      box.appendChild(badge);
+    });
+  }
+  function toggleExtraCalendar(id){
+    if(extraCalendarIds.includes(id)){
+      extraCalendarIds = extraCalendarIds.filter(x => x !== id);
+      hiddenCalendarIds.delete(id);
+      saveHiddenCalendars();
+    } else {
+      extraCalendarIds.push(id);
+      if(!calColors[id]) calColors[id] = defaultColorFor(id);
+    }
+    saveCalSettings();
+    renderCalendarBadges();
+    loadEvents();
+  }
+  function saveHiddenCalendars(){
+    localStorage.setItem("gcal_gantt_hidden_calendars", JSON.stringify(Array.from(hiddenCalendarIds)));
+  }
+  function toggleCalendarVisibility(id){
+    if(hiddenCalendarIds.has(id)) hiddenCalendarIds.delete(id);
+    else hiddenCalendarIds.add(id);
+    saveHiddenCalendars();
+    renderCalendarBadges();
+    render(); // solo un re-render: gli eventi restano già in memoria, nessuna richiesta a Google
+  }
+
+  const addCalendarBtn = document.getElementById("add-calendar-btn");
+  const calAddMenu = document.getElementById("cal-add-menu");
+  addCalendarBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const rect = addCalendarBtn.getBoundingClientRect();
+    calAddMenu.innerHTML = "";
+    availableCalendars.filter(c => c.id !== calendarId).forEach(c => {
+      const b = document.createElement("button");
+      b.textContent = (extraCalendarIds.includes(c.id) ? "✓ " : "") + c.name;
+      b.addEventListener("click", () => { toggleExtraCalendar(c.id); calAddMenu.style.display = "none"; });
+      calAddMenu.appendChild(b);
+    });
+    calAddMenu.style.left = rect.left + "px";
+    calAddMenu.style.top = (rect.bottom + 6) + "px";
+    calAddMenu.style.display = "block";
+  });
+  document.addEventListener("click", () => { calAddMenu.style.display = "none"; });
+
+  // ---------- events ----------
+  async function fetchCalendarEvents(calId){
+    // solo eventi che si sovrappongono all'intervallo visualizzato: niente righe senza barra visibile
+    const timeMin = viewStart.toISOString();
+    const timeMax = addDays(viewStart, NUM_DAYS).toISOString();
+    let items = [];
+    let pageToken;
+    do{
+      const qs = new URLSearchParams({
+        singleEvents: "true", orderBy: "startTime", maxResults: "2500",
+        timeMin, timeMax
+      });
+      if(pageToken) qs.set("pageToken", pageToken);
+      const data = await gapi("GET", `/calendars/${encodeURIComponent(calId)}/events?${qs.toString()}`);
+      items = items.concat(data.items || []);
+      pageToken = data.nextPageToken;
+    } while(pageToken);
+    return items
+      .filter(ev => ev.status !== "cancelled")
+      .map(ev => toTask(ev, calId))
+      .filter(Boolean);
+  }
+
+  async function loadEvents(){
+    try{
+      const ids = [calendarId].concat(extraCalendarIds);
+      const [results, holidays] = await Promise.all([
+        Promise.all(ids.map(id => fetchCalendarEvents(id))),
+        loadHolidays()
+      ]);
+      holidayDates = holidays;
+      events = [].concat(...results).sort((a,b) => a.start - b.start);
+      render();
+      syncPausedMarkers();
+    }catch(e){ console.error(e); }
+  }
+
+  function toTask(ev, calId){
+    let start, end;
+    if(ev.start && ev.start.date){
+      start = parseISO(ev.start.date);
+      end = parseISO(ev.end.date); // exclusive
+    } else if(ev.start && ev.start.dateTime){
+      start = startOfDay(new Date(ev.start.dateTime));
+      const rawEnd = new Date(ev.end.dateTime);
+      end = addDays(startOfDay(rawEnd), (rawEnd.getHours()||rawEnd.getMinutes()) ? 1 : 0);
+      if(end <= start) end = addDays(start,1);
+    } else { return null; }
+    const sharedProps = ev.extendedProperties && ev.extendedProperties.shared || null;
+    const privateProps = ev.extendedProperties && ev.extendedProperties.private || null;
+    return {
+      id: ev.id, calId, title: ev.summary || "(senza titolo)", start, end,
+      raw: { start: ev.start, end: ev.end, recurringEventId: ev.recurringEventId || null, eventType: ev.eventType || null },
+      sharedProps, privateProps,
+      groupId: sharedProps ? (sharedProps.dgtGanttGroup || null) : null,
+      role: sharedProps ? (sharedProps.dgtGanttRole || null) : null,
+      color: privateProps ? (privateProps.dgtGanttColor || null) : null,
+      done: !!(privateProps && privateProps.dgtGanttDone === "true"),
+      priority: privateProps ? (privateProps.dgtGanttPriority || null) : null,
+      paused: !!(privateProps && privateProps.dgtGanttPause === "true"),
+      colorId: ev.colorId || null
+    };
+  }
+
+  async function patchTaskDates(task){
+    let body;
+    const r = task.raw;
+    if(r && r.start && r.start.dateTime && r.end && r.end.dateTime){
+      // evento CON ORARIO: sposto i giorni mantenendo ora di inizio/fine e fuso originali
+      const sDT = new Date(r.start.dateTime), eDT = new Date(r.end.dateTime);
+      const S0 = startOfDay(sDT);
+      let E0 = addDays(startOfDay(eDT), (eDT.getHours() || eDT.getMinutes()) ? 1 : 0);
+      if(E0 <= S0) E0 = addDays(S0, 1);
+      const ns = new Date(sDT); ns.setDate(ns.getDate() + daysBetween(S0, task.start));
+      const ne = new Date(eDT); ne.setDate(ne.getDate() + daysBetween(E0, task.end));
+      if(ne <= ns) ne.setTime(ns.getTime() + 3600000);
+      body = {
+        start: { dateTime: ns.toISOString(), timeZone: r.start.timeZone },
+        end:   { dateTime: ne.toISOString(), timeZone: r.end.timeZone || r.start.timeZone }
+      };
+    } else {
+      // evento a GIORNATA INTERA
+      body = { start: { date: fmtISO(task.start) }, end: { date: fmtISO(task.end) } };
+    }
+    await gapi("PATCH", `/calendars/${encodeURIComponent(task.calId)}/events/${task.id}`, body);
+  }
+
+  async function patchTaskDone(taskId, done){
+    const t = events.find(ev => ev.id === taskId);
+    const existingPrivate = (t && t.privateProps) || {};
+    const newPrivate = Object.assign({}, existingPrivate, { dgtGanttDone: done ? "true" : null });
+    await gapi("PATCH", `/calendars/${encodeURIComponent(t.calId)}/events/${taskId}`, {
+      extendedProperties: { private: newPrivate }
+    });
+  }
+  function toggleTaskDone(task){
+    patchTaskDone(task.id, !task.done).then(loadEvents).catch(err => { console.error(err); loadEvents(); });
+  }
+
+  async function patchTaskPriority(taskId, priority){
+    const t = events.find(ev => ev.id === taskId);
+    if(!t) return;
+    const existingPrivate = (t && t.privateProps) || {};
+    const newPrivate = Object.assign({}, existingPrivate, { dgtGanttPriority: priority ? priority : null });
+    await gapi("PATCH", `/calendars/${encodeURIComponent(t.calId)}/events/${taskId}`, {
+      extendedProperties: { private: newPrivate }
+    });
+  }
+
+  // Come si vede una pausa su Google Calendar: icona davanti al titolo + colore grigio (Grafite)
+  const PAUSE_ICON = "⏸️";      // per cambiare il simbolo basta modificare questa riga
+  const OLD_PAUSE_ICONS = ["💤", "🟩⏸️"];  // simboli usati in passato: vengono sostituiti da quello nuovo
+  const PAUSE_COLOR_ID = "8";      // colore evento Google "Grafite"
+  function stripPauseIcon(title){
+    for(const ic of [PAUSE_ICON].concat(OLD_PAUSE_ICONS)){
+      if(title.startsWith(ic)) return title.slice(ic.length).trimStart();
+    }
+    // varianti dello stesso simbolo (es. ⏸ senza il selettore emoji, che alcune app Android tolgono)
+    return title.replace(/^(?:\u{1F7E9}\s*)?(?:\u23F8[\uFE0E\uFE0F]?|\u{1F4A4})\s*/u, "");
+  }
+  function withPauseIcon(title){ return PAUSE_ICON + " " + stripPauseIcon(title); }
+
+  async function patchTaskPause(taskId, on){
+    const t = events.find(ev => ev.id === taskId);
+    if(!t) return;
+    const priv = t.privateProps || {};
+    let body;
+    if(on){
+      // ricordo il colore originale per ripristinarlo quando tolgo la pausa
+      const prevColor = (t.paused && priv.dgtGanttPrevColorId) ? priv.dgtGanttPrevColorId : (t.colorId || "none");
+      body = {
+        summary: withPauseIcon(t.title),
+        colorId: PAUSE_COLOR_ID,
+        extendedProperties: { private: Object.assign({}, priv, { dgtGanttPause: "true", dgtGanttPrevColorId: prevColor }) }
+      };
+    } else {
+      const prev = priv.dgtGanttPrevColorId;
+      body = {
+        summary: stripPauseIcon(t.title),
+        extendedProperties: { private: Object.assign({}, priv, { dgtGanttPause: null, dgtGanttPrevColorId: null }) }
+      };
+      if(prev !== undefined && prev !== null) body.colorId = (prev === "none") ? null : prev;
+    }
+    await gapi("PATCH", `/calendars/${encodeURIComponent(t.calId)}/events/${taskId}`, body);
+  }
+
+  // una volta per evento: gli eventi già in pausa ricevono icona e colore su Google
+  const pauseSyncTried = new Set();
+  async function syncPausedMarkers(){
+    const todo = events.filter(t => t.paused && (!t.title.startsWith(PAUSE_ICON) || t.colorId !== PAUSE_COLOR_ID) && !pauseSyncTried.has(t.id));
+    if(!todo.length) return;
+    todo.forEach(t => pauseSyncTried.add(t.id));
+    dlog(`Sincronizzo ${todo.length} eventi già in pausa (icona + colore su Google)`, "step");
+    try{
+      for(const t of todo){ await patchTaskPause(t.id, true); }
+      await loadEvents();
+    }catch(e){ console.error(e); dlog("Sincronizzazione pausa fallita: " + e.message, "err"); }
+  }
+  async function setPauseForTasks(ids, on){
+    try{
+      for(const id of ids){ await patchTaskPause(id, on); }
+    }catch(err){ console.error(err); alert("Non è stato possibile cambiare lo stato di pausa."); }
+    selectedIds.clear();
+    loadEvents();
+  }
+
+  async function patchTaskTitle(taskId, newTitle){
+    const t = events.find(ev => ev.id === taskId);
+    if(!t) return;
+    await gapi("PATCH", `/calendars/${encodeURIComponent(t.calId)}/events/${taskId}`, { summary: newTitle });
+    t.title = newTitle;
+  }
+  async function patchTaskColor(taskId, color){
+    const t = events.find(ev => ev.id === taskId);
+    const existingPrivate = (t && t.privateProps) || {};
+    const newPrivate = Object.assign({}, existingPrivate, { dgtGanttColor: color });
+    await gapi("PATCH", `/calendars/${encodeURIComponent(t.calId)}/events/${taskId}`, {
+      extendedProperties: { private: newPrivate }
+    });
+
+    // if this is a parent, clear any manual color override on its children so they inherit the new color
+    if(t && t.groupId && t.role === "parent"){
+      const children = events.filter(ev => ev.groupId === t.groupId && ev.role !== "parent" && ev.id !== t.id && ev.color);
+      for(const child of children){
+        const childPrivate = Object.assign({}, child.privateProps || {}, { dgtGanttColor: null });
+        await gapi("PATCH", `/calendars/${encodeURIComponent(child.calId)}/events/${child.id}`, {
+          extendedProperties: { private: childPrivate }
+        });
+      }
+    }
+  }
+
+  async function createTask(title, start, end, when){
+    const body = { summary: title, start: when ? when.start : { date: fmtISO(start) }, end: when ? when.end : { date: fmtISO(end) } };
+    await gapi("POST", `/calendars/${encodeURIComponent(calendarId)}/events`, body);
+    loadEvents();
+  }
+
+  // crea un nuovo evento come figlio di un padre già esistente (stesso calendario e stesso gruppo del padre)
+  async function createChildTask(title, start, end, calId, groupId, when){
+    const body = {
+      summary: title,
+      start: when ? when.start : { date: fmtISO(start) }, end: when ? when.end : { date: fmtISO(end) },
+      extendedProperties: { shared: { dgtGanttGroup: groupId, dgtGanttRole: "child" } }
+    };
+    await gapi("POST", `/calendars/${encodeURIComponent(calId)}/events`, body);
+    loadEvents();
+  }
+
+  async function deleteEventRaw(id, calId){
+    await gapi("DELETE", `/calendars/${encodeURIComponent(calId)}/events/${id}`);
+  }
+  async function deleteTask(id){
+    const t = events.find(ev => ev.id === id);
+    await deleteEventRaw(id, (t && t.calId) || calendarId);
+    loadEvents();
+  }
+
+  // ---------- navigation (scroll within the already-loaded range) ----------
+  document.getElementById("prev-btn").addEventListener("click", () => {
+    timelineWrap.scrollBy({ left: -timelineWrap.clientWidth * 0.9, behavior: "smooth" });
+  });
+  document.getElementById("next-btn").addEventListener("click", () => {
+    timelineWrap.scrollBy({ left: timelineWrap.clientWidth * 0.9, behavior: "smooth" });
+  });
+  function scrollToToday(smooth){
+    const offset = daysBetween(viewStart, startOfDay(new Date())) * COL_W;
+    timelineWrap.scrollTo({ left: Math.max(0, offset - COL_W * 2), behavior: smooth ? "smooth" : "auto" });
+  }
+  document.getElementById("today-btn").addEventListener("click", () => scrollToToday(true));
+
+  // ⏫ / ⏬: vanno al primo / all'ultimo evento della lista (in verticale) e portano la timeline alla sua data
+  function goToEdgeEvent(last){
+    const list = buildDisplayList();
+    if(!list.length) return;
+    const t = (last ? list[list.length - 1] : list[0]).task;
+    const offset = daysBetween(viewStart, startOfDay(t.start)) * COL_W;
+    timelineWrap.scrollTo({
+      left: Math.max(0, offset - COL_W * 2),
+      top: last ? timelineWrap.scrollHeight : 0,
+      behavior: "smooth"
+    });
+  }
+  document.getElementById("first-event-btn").addEventListener("click", () => goToEdgeEvent(false));
+  document.getElementById("last-event-btn").addEventListener("click", () => goToEdgeEvent(true));
+
+  // ---------- toggle: mostra anche eventi passati (fino a ~2 anni fa) ----------
+  const togglePastBtn = document.getElementById("toggle-past-btn");
+  const pastModeLabel = document.getElementById("past-mode-label");
+  function updateTogglePastBtnUI(){
+    togglePastBtn.classList.toggle("active", showPastEvents);
+    pastModeLabel.style.display = showPastEvents ? "inline-flex" : "none";
+    togglePastBtn.title = showPastEvents
+      ? "Nascondi eventi passati (torna a: da una settimana fa in avanti)"
+      : "Mostra anche eventi passati (fino a 2 anni fa)";
+  }
+  updateTogglePastBtnUI();
+  togglePastBtn.addEventListener("click", () => {
+    showPastEvents = !showPastEvents;
+    if(showPastEvents && recentOnly){ recentOnly = false; updateRecentBtnUI(); }   // ⏪ e ⏩ si escludono a vicenda
+    localStorage.setItem("gcal_gantt_show_past", showPastEvents ? "true" : "false");
+    updateTogglePastBtnUI();
+    applyDateRangeForMode();
+    selectedIds.clear();
+    loadEvents().then(() => {
+      scrollToToday(false);
+      render();
+    });
+  });
+
+  // ---------- toggle temporaneo ⏩: nasconde gli eventi passati (restano solo gli ultimi 7 giorni) ----------
+  const toggleRecentBtn = document.getElementById("toggle-recent-btn");
+  function updateRecentBtnUI(){
+    toggleRecentBtn.classList.toggle("active", recentOnly);
+    toggleRecentBtn.title = recentOnly
+      ? "Eventi passati a medio termine nascosti: clicca per mostrare di nuovo anche i 30 giorni passati"
+      : "Nasconde gli eventi passati a medio termine: mostra solo da 7 giorni fa in avanti";
+  }
+  updateRecentBtnUI();
+  toggleRecentBtn.addEventListener("click", () => {
+    recentOnly = !recentOnly;
+    if(recentOnly && showPastEvents){
+      showPastEvents = false;                                  // ⏪ e ⏩ si escludono a vicenda
+      localStorage.setItem("gcal_gantt_show_past", "false");
+      updateTogglePastBtnUI();
+    }
+    updateRecentBtnUI();
+    applyDateRangeForMode();
+    selectedIds.clear();
+    loadEvents().then(() => {
+      scrollToToday(false);
+      render();
+    });
+  });
+
+  // ---------- DOM refs ----------
+  const taskCol = document.getElementById("task-col");
+  const taskRowsViewport = document.getElementById("task-rows-viewport");
+  const taskRowsInner = document.getElementById("task-rows-inner");
+  const timelineInner = document.getElementById("timeline-inner");
+  const timelineWrap = document.getElementById("timeline-wrap");
+  const tlHeadInner = document.getElementById("tl-head-inner");
+  timelineWrap.addEventListener("scroll", () => {
+    tlHeadInner.style.transform = `translateX(${-timelineWrap.scrollLeft}px)`;
+    taskRowsInner.style.transform = `translateY(${-timelineWrap.scrollTop}px)`;
+  });
+  // la colonna attività non scrolla da sola: la rotellina del mouse sopra di essa
+  // muove invece lo scroll verticale reale (quello della timeline), che è l'unica fonte di verità
+  taskRowsViewport.addEventListener("wheel", (e) => {
+    timelineWrap.scrollTop += e.deltaY;
+    e.preventDefault();
+  }, { passive:false });
+
+  // ---------- zoom (ctrl/cmd + wheel or pinch, or buttons) ----------
+  function setColW(newW, anchorClientX){
+    newW = Math.max(COL_W_MIN, Math.min(COL_W_MAX, newW));
+    if(Math.round(newW) === Math.round(COL_W)) return;
+    let dayUnderCursor = null, cursorOffsetInWrap = 0;
+    if(anchorClientX !== undefined){
+      const rect = timelineWrap.getBoundingClientRect();
+      cursorOffsetInWrap = anchorClientX - rect.left;
+      dayUnderCursor = (timelineWrap.scrollLeft + cursorOffsetInWrap) / COL_W;
+    }
+    COL_W = newW;
+    localStorage.setItem("gcal_gantt_col_w", Math.round(COL_W));
+    render();
+    if(dayUnderCursor !== null){
+      timelineWrap.scrollLeft = dayUnderCursor * COL_W - cursorOffsetInWrap;
+    }
+  }
+
+  timelineWrap.addEventListener("wheel", (e) => {
+    if(e.ctrlKey || e.metaKey){
+      e.preventDefault();
+      const factor = Math.exp(-e.deltaY * 0.01);
+      setColW(COL_W * factor, e.clientX);
+    }
+  }, { passive:false });
+
+  document.getElementById("zoom-in-btn").addEventListener("click", () => {
+    const rect = timelineWrap.getBoundingClientRect();
+    setColW(COL_W * 1.25, rect.left + rect.width/2);
+  });
+  document.getElementById("zoom-out-btn").addEventListener("click", () => {
+    const rect = timelineWrap.getBoundingClientRect();
+    setColW(COL_W * 0.8, rect.left + rect.width/2);
+  });
+
+  // ---------- draggable splitter ----------
+  const splitter = document.getElementById("splitter");
+  const TASKCOL_MIN = 60, TASKCOL_MAX = 440;
+  let taskColWidth = parseInt(localStorage.getItem("gcal_gantt_taskcol_w")) || 220;
+  taskCol.style.flex = "0 0 " + taskColWidth + "px";
+  let splitDrag = null;
+
+  splitter.addEventListener("mousedown", (e) => {
+    e.preventDefault();
+    splitDrag = { startX: e.clientX, startW: taskColWidth };
+    splitter.classList.add("dragging");
+  });
+
+  // ---------- draggable board height ----------
+  const board = document.getElementById("board");
+  const boardResizeHandle = document.getElementById("board-resize-handle");
+  const BOARD_H_MIN = 220;
+  const savedBoardH = parseInt(localStorage.getItem("gcal_gantt_board_h"));
+  if(savedBoardH){
+    board.style.maxHeight = "none";
+    board.style.height = savedBoardH + "px";
+  }
+  let boardResizeDrag = null;
+  boardResizeHandle.addEventListener("mousedown", (e) => {
+    e.preventDefault();
+    boardResizeDrag = { startY: e.clientY, startH: board.getBoundingClientRect().height };
+    boardResizeHandle.classList.add("dragging");
+  });
+  boardResizeHandle.addEventListener("dblclick", () => {
+    board.style.maxHeight = "";
+    board.style.height = "";
+    localStorage.removeItem("gcal_gantt_board_h");
+  });
+
+  // ---------- task list font size ----------
+  const FONT_MIN = 11, FONT_MAX = 18;
+  let taskFontSize = parseInt(localStorage.getItem("gcal_gantt_task_font")) || 13;
+  document.documentElement.style.setProperty("--task-font", taskFontSize + "px");
+  function setTaskFont(size){
+    taskFontSize = Math.max(FONT_MIN, Math.min(FONT_MAX, size));
+    document.documentElement.style.setProperty("--task-font", taskFontSize + "px");
+    localStorage.setItem("gcal_gantt_task_font", taskFontSize);
+  }
+  document.getElementById("font-plus").addEventListener("click", () => setTaskFont(taskFontSize + 1));
+  document.getElementById("font-minus").addEventListener("click", () => setTaskFont(taskFontSize - 1));
+
+  // ---------- weather row toggle ----------
+  const meteoToggleBtn = document.getElementById("meteo-toggle-btn");
+  function updateMeteoToggleBtn(){
+    meteoToggleBtn.classList.toggle("active", meteoVisible);
+    meteoToggleBtn.title = meteoVisible ? "Nascondi riga meteo" : "Mostra riga meteo";
+  }
+  updateMeteoToggleBtn();
+  meteoToggleBtn.addEventListener("click", () => {
+    meteoVisible = !meteoVisible;
+    localStorage.setItem("gcal_gantt_meteo_visible", meteoVisible ? "true" : "false");
+    updateMeteoToggleBtn();
+    render();
+  });
+
+  // ---------- toggle: strisce per data di inizio ----------
+  const stripeToggleBtn = document.getElementById("stripe-toggle-btn");
+  function updateStripeToggleBtn(){
+    stripeToggleBtn.classList.toggle("active", stripeByStart);
+    stripeToggleBtn.title = stripeByStart
+      ? "Togli la colorazione a strisce"
+      : "Colora a strisce le attività che iniziano lo stesso giorno";
+  }
+  updateStripeToggleBtn();
+  stripeToggleBtn.addEventListener("click", () => {
+    stripeByStart = !stripeByStart;
+    localStorage.setItem("gcal_gantt_stripe", stripeByStart ? "true" : "false");
+    updateStripeToggleBtn();
+    render();
+  });
+
+  // ---------- toggle: mostra solo gli eventi con una priorità (dgtGanttPriority valorizzata) ----------
+  const prioFilterBtn = document.getElementById("prio-filter-btn");
+  function updatePrioFilterBtn(){
+    prioFilterBtn.classList.toggle("active", onlyWithPriority);
+    prioFilterBtn.title = onlyWithPriority
+      ? "Torna a mostrare tutti gli eventi"
+      : "Mostra solo gli eventi con una priorità";
+  }
+  updatePrioFilterBtn();
+  prioFilterBtn.addEventListener("click", () => {
+    onlyWithPriority = !onlyWithPriority;
+    localStorage.setItem("gcal_gantt_only_priority", onlyWithPriority ? "true" : "false");
+    updatePrioFilterBtn();
+    render();
+  });
+
+  // ---------- toggle: nascondi / mostra gli eventi in pausa ----------
+  const pauseFilterBtn = document.getElementById("pause-filter-btn");
+  function updatePauseFilterBtn(){
+    pauseFilterBtn.classList.toggle("active", hidePaused);
+    pauseFilterBtn.title = hidePaused
+      ? "Gli eventi in pausa sono nascosti: clicca per mostrarli"
+      : "Nascondi gli eventi in pausa";
+  }
+  updatePauseFilterBtn();
+  pauseFilterBtn.addEventListener("click", () => {
+    hidePaused = !hidePaused;
+    localStorage.setItem("gcal_gantt_hide_paused", hidePaused ? "true" : "false");
+    updatePauseFilterBtn();
+    render();
+  });
+
+  // ---------- row height (shared by both columns) ----------
+  document.documentElement.style.setProperty("--row-h", ROW_H + "px");
+  document.documentElement.style.setProperty("--bar-h", barHeightFor(ROW_H) + "px");
+  function setRowH(newH){
+    ROW_H = Math.max(ROW_H_MIN, Math.min(ROW_H_MAX, newH));
+    document.documentElement.style.setProperty("--row-h", ROW_H + "px");
+    document.documentElement.style.setProperty("--bar-h", barHeightFor(ROW_H) + "px");
+    localStorage.setItem("gcal_gantt_row_h", ROW_H);
+    render();
+  }
+  document.getElementById("rowh-plus-btn").addEventListener("click", () => setRowH(ROW_H + 8));
+  document.getElementById("rowh-minus-btn").addEventListener("click", () => setRowH(ROW_H - 8));
+
+  // ---------- render ----------
+  function updateEventCount(){
+    const el = document.getElementById("dbg-title");
+    if(!el) return;
+    const n = events.filter(t => t.calId === calendarId).length;
+    el.textContent = "🐞 Log debug · " + n + (n === 1 ? " evento" : " eventi");
+  }
+  function render(){
+    updateEventCount();
+    // preserva la posizione di scroll: svuotando il DOM il browser azzera scrollTop,
+    // e senza questo la lista tornerebbe in cima a ogni modifica (priorità, colore, ...)
+    const keepScrollTop = timelineWrap.scrollTop;
+    const keepScrollLeft = timelineWrap.scrollLeft;
+    taskRowsInner.innerHTML = "";
+    timelineInner.innerHTML = "";
+    const totalW = NUM_DAYS * COL_W;
+    timelineInner.style.width = totalW + "px";
+
+    // header: month/year row (alternating colors per month, for a quick glance)
+    const head = document.getElementById("tl-head-inner");
+    head.innerHTML = "";
+    head.style.width = totalW + "px";
+    const monthRow = document.createElement("div");
+    monthRow.className = "tl-month-row";
+    {
+      let i = 0, segIndex = 0;
+      while(i < NUM_DAYS){
+        const d = addDays(viewStart, i);
+        const key = d.getFullYear()*12 + d.getMonth();
+        let count = 0;
+        while(i + count < NUM_DAYS){
+          const dd = addDays(viewStart, i + count);
+          if(dd.getFullYear()*12 + dd.getMonth() !== key) break;
+          count++;
+        }
+        const cell = document.createElement("div");
+        cell.className = "tl-month-cell " + (segIndex % 2 === 0 ? "month-a" : "month-b");
+        cell.style.width = (count * COL_W) + "px";
+        cell.textContent = `${MONTHS_FULL[d.getMonth()]} ${d.getFullYear()}`;
+        monthRow.appendChild(cell);
+        i += count;
+        segIndex++;
+      }
+    }
+    head.appendChild(monthRow);
+
+    // header: week row
+    const weekRow = document.createElement("div");
+    weekRow.className = "tl-week-row";
+    for(let i=0;i<NUM_DAYS;i+=7){
+      const monday = addDays(viewStart, i);
+      const sunday = addDays(monday, 6);
+      const cell = document.createElement("div");
+      cell.className = "tl-week-cell";
+      cell.style.width = (7*COL_W) + "px";
+      cell.textContent = `${monday.getDate()}-${sunday.getDate()}${MONTHS[sunday.getMonth()]}`;
+      weekRow.appendChild(cell);
+    }
+    head.appendChild(weekRow);
+
+    // header: day-number row
+    const numRow = document.createElement("div");
+    numRow.className = "tl-num-row";
+    const todayISOForHead = fmtISO(new Date());
+    for(let i=0;i<NUM_DAYS;i++){
+      const d = addDays(viewStart, i);
+      const dow = d.getDay();
+      const isWeekend = (dow === 0 || dow === 6);
+      const isToday = (fmtISO(d) === todayISOForHead);
+      const cell = document.createElement("div");
+      const kind = dayKind(d);
+      cell.className = "tl-num-cell" + (isWeekend ? " weekend" : "") + (kind ? " " + kind : "") + (isToday ? " today" : "");
+      cell.style.width = COL_W + "px";
+      cell.textContent = d.getDate();
+      numRow.appendChild(cell);
+    }
+    head.appendChild(numRow);
+
+    // header: day-letter row
+    const dayRow = document.createElement("div");
+    dayRow.className = "tl-day-row";
+    for(let i=0;i<NUM_DAYS;i++){
+      const d = addDays(viewStart, i);
+      const dow = d.getDay();
+      const isWeekend = (dow === 0 || dow === 6);
+      const isToday = (fmtISO(d) === fmtISO(new Date()));
+      const cell = document.createElement("div");
+      const kind = dayKind(d);
+      cell.className = "tl-day-cell " + (isWeekend ? "weekend" : "weekday") + (kind ? " " + kind : "") + (isToday ? " today" : "");
+      cell.style.width = COL_W + "px";
+      cell.textContent = DOW_LETTER[dow];
+      dayRow.appendChild(cell);
+    }
+    head.appendChild(dayRow);
+    tlHeadInner.style.transform = `translateX(${-timelineWrap.scrollLeft}px)`;
+
+    // header: weather row (last row before the actual task rows), only if enabled
+    if(meteoVisible){
+      const meteoRow = document.createElement("div");
+      meteoRow.className = "tl-meteo-row";
+      for(let i=0;i<NUM_DAYS;i++){
+        const d = addDays(viewStart, i);
+        const cell = document.createElement("div");
+        cell.className = "tl-meteo-cell";
+        cell.style.width = COL_W + "px";
+        const info = meteoByDate[fmtISO(d)];
+        if(info){
+          cell.textContent = info.icon;
+          cell.classList.add("has-info");
+          cell.title = "Clicca per il dettaglio meteo";
+          cell.addEventListener("click", () => openMeteoModal(d, info));
+        }
+        meteoRow.appendChild(cell);
+      }
+      head.appendChild(meteoRow);
+    }
+    const headEl = taskCol.querySelector(".head");
+    if(headEl) headEl.style.height = (meteoVisible ? 120 : 92) + "px";
+    document.getElementById("tl-head-wrap").style.height = (meteoVisible ? 120 : 92) + "px";   // stessa altezza della colonna attività (bordo incluso)
+
+    if(events.length === 0){
+      const empty = document.createElement("div");
+      empty.className = "empty-state";
+      empty.innerHTML = "<h2>Nessuna attività in questo intervallo</h2><p>Crea il primo task con “+ Nuovo task”.</p>";
+      timelineInner.appendChild(empty);
+    }
+
+    // rows
+    const rowsWrap = document.createElement("div");
+    rowsWrap.className = "tl-rows";
+    rowsWrap.style.width = totalW + "px";
+
+    const displayList = buildDisplayList();
+
+    // colorazione a strisce: agli eventi con la stessa data di inizio
+    // viene assegnato lo stesso sfondo, alternando due colori in ordine cronologico
+    let stripeClassByStart = {};
+    if(stripeByStart){
+      let stripeIdx = 0, prevStartKey = null;
+      displayList.forEach(entry => {
+        const key = fmtISO(entry.task.start);
+        if(key !== prevStartKey){
+          stripeIdx = (prevStartKey === null) ? 0 : stripeIdx + 1;
+          prevStartKey = key;
+        }
+        stripeClassByStart[key] = stripeIdx % 2 === 0 ? "stripe-a" : "stripe-b";
+      });
+    }
+
+    displayList.forEach(entry => {
+      const task = entry.task;
+      const taskRow = document.createElement("div");
+      taskRow.className = "task-row" + (entry.isChild ? " child-row" : "") + (searchHighlightIds && searchHighlightIds.has(task.id) ? " search-hit" : "") + (task.paused ? " is-paused" : "") + (entry.pauseLast ? " pause-last" : "");
+      taskRow.dataset.eventId = task.id;
+      const leftIcon = entry.hasChildren
+        ? `<button class="toggle-btn" title="${collapsedGroups.has(entry.groupId) ? "Espandi" : "Comprimi"}">${collapsedGroups.has(entry.groupId) ? "▶" : "▼"}</button>`
+        : (entry.isChild ? `<span class="toggle-spacer"></span>` : ``);
+      const doneBtnHtml = `<button class="done-checkbox${task.done ? " checked" : ""}" title="${task.done ? "Segna come da fare" : "Segna come eseguito"}">${task.done ? "✓" : ""}</button>`;
+
+      let prioHtml = "";
+      if(task.priority){
+        const prioNames = { high: "ALTA", medium: "MEDIA", low: "BASSA" };
+        prioHtml = `<span class="priority-bar ${task.priority}" title="Priorità: ${prioNames[task.priority] || task.priority}"></span>`;
+      }
+
+      taskRow.classList.toggle("is-done", !!task.done);
+      if(stripeByStart && !task.paused) taskRow.classList.add(stripeClassByStart[fmtISO(task.start)]);
+      // icona iniziale (es. 🔹) estratta dal titolo: se il testo va a capo,
+      // le righe successive partono allineate sotto l'inizio del testo, non sotto l'icona
+      const label = activityLabel(task.title);
+      let leadIconHtml = "";
+      let labelHtml = escapeHtml(label);
+      const leadIconMatch = label.match(/^(\p{Extended_Pictographic}(?:\uFE0F|\u200D\p{Extended_Pictographic})*)\s*([\s\S]*)$/u);
+      if(leadIconMatch){
+        leadIconHtml = `<span class="title-icon">${leadIconMatch[1]}</span>`;
+        labelHtml = escapeHtml(leadIconMatch[2]);
+      }
+      taskRow.innerHTML = `<span class="name">${leftIcon}${doneBtnHtml}${prioHtml}${leadIconHtml}<span class="txt-wrap"><span class="txt">${labelHtml}</span></span></span>`;
+      const rowRight = document.createElement("span");
+      rowRight.className = "row-right";
+      const del = document.createElement("button");
+      del.className = "del"; del.textContent = "✕"; del.title = "Elimina";
+      del.addEventListener("click", (e) => { e.stopPropagation(); if(confirm(`Eliminare "${task.title}"?`)) deleteTask(task.id); });
+      rowRight.appendChild(del);
+      const calSq = document.createElement("span");
+      calSq.className = "cal-square";
+      calSq.style.background = calColors[task.calId] || "var(--accent)";
+      calSq.title = "Calendario: " + calName(task.calId);
+      rowRight.appendChild(calSq);
+      const dbg = document.createElement("button");
+      dbg.className = "debug-btn";
+      dbg.textContent = "🐞";
+      dbg.title = "DEBUG: mostra extendedProperties";
+      dbg.addEventListener("click", (e) => { e.stopPropagation(); showDebugInfo(task); });
+      rowRight.appendChild(dbg);
+      taskRow.appendChild(rowRight);
+      if(entry.hasChildren){
+        taskRow.querySelector(".toggle-btn").addEventListener("click", (e) => {
+          e.stopPropagation();
+          if(collapsedGroups.has(entry.groupId)) collapsedGroups.delete(entry.groupId);
+          else collapsedGroups.add(entry.groupId);
+          render();
+        });
+      }
+      taskRow.querySelector(".done-checkbox").addEventListener("click", (e) => {
+        e.stopPropagation();
+        toggleTaskDone(task);
+      });
+      taskRow.addEventListener("click", () => {
+        const offset = daysBetween(viewStart, task.start) * COL_W;
+        timelineWrap.scrollTo({ left: Math.max(0, offset - COL_W * 2), behavior: "smooth" });
+      });
+      taskRowsInner.appendChild(taskRow);
+
+      const row = document.createElement("div");
+      row.className = "tl-row";
+
+      const bar = document.createElement("div");
+      bar.className = "bar";
+      bar.dataset.eventId = task.id;
+      bar.textContent = barLabel(task.title);
+      if(selectedIds.has(task.id)) bar.classList.add("selected");
+      if(task.done) bar.classList.add("is-done");
+      if(task.paused) bar.classList.add("is-paused");
+      if(entry.hasChildren) bar.classList.add("bar-parent"); // è solo un contenitore per i figli, non un'attività da fare
+      bar.style.top = Math.max(2, (ROW_H - barHeightFor(ROW_H)) / 2) + "px";
+      if(task.color){ bar.style.background = task.color; bar.style.color = contrastTextColor(task.color); }
+      else if(entry.isChild && entry.parentColor){ bar.style.background = entry.parentColor; bar.style.color = contrastTextColor(entry.parentColor); }
+      else if(calColors[task.calId]){ bar.style.background = calColors[task.calId]; bar.style.color = contrastTextColor(calColors[task.calId]); }
+      positionBar(bar, task);
+      attachDrag(bar, task);
+      row.appendChild(bar);
+
+      const left = document.createElement("div"); left.className="handle left";
+      const right = document.createElement("div"); right.className="handle right";
+      bar.appendChild(left); bar.appendChild(right);
+      attachResize(left, task, "left");
+      attachResize(right, task, "right");
+
+      rowsWrap.appendChild(row);
+    });
+
+    const totalRowsH = displayList.length * ROW_H;
+    const todayISO = fmtISO(new Date());
+    for(let i=0;i<NUM_DAYS;i++){
+      const d = addDays(viewStart, i);
+      const dow = d.getDay();
+      const isWeekend = (dow === 0 || dow === 6);
+      const isToday = (fmtISO(d) === todayISO);
+      const line = document.createElement("div");
+      const isWeekStart = (i % 7 === 0);
+      let cls = "tl-grid-line";
+      if(isWeekStart) cls += " week-start";
+      if(isToday) cls += " today";
+      else { const kind = dayKind(d); if(kind) cls += " " + kind; }
+      line.className = cls;
+      line.style.left = (i*COL_W)+"px";
+      line.style.width = COL_W+"px";
+      line.style.height = totalRowsH+"px";
+      rowsWrap.insertBefore(line, rowsWrap.firstChild);
+    }
+
+    timelineInner.appendChild(rowsWrap);
+
+    // ripristina la posizione salvata e ricalcola i transform delle colonne sincronizzate
+    timelineWrap.scrollTop = keepScrollTop;
+    timelineWrap.scrollLeft = keepScrollLeft;
+    tlHeadInner.style.transform = `translateX(${-timelineWrap.scrollLeft}px)`;
+    taskRowsInner.style.transform = `translateY(${-timelineWrap.scrollTop}px)`;
+  }
+
+  function barLabel(title){
+    return stripPauseIcon(title).replace(/\s*(🔁|⬇️|📂|🔹)\s*/g, " ").trim();
+  }
+
+  function activityLabel(title){
+    return stripPauseIcon(title).replace(/\s*🔁\s*/g, " ").trim();
+  }
+
+  function contrastTextColor(hex){
+    const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    if(!m) return "#fff";
+    const r = parseInt(m[1],16), g = parseInt(m[2],16), b = parseInt(m[3],16);
+    const luminance = (0.299*r + 0.587*g + 0.114*b) / 255;
+    return luminance > 0.62 ? "#1B2028" : "#fff";
+  }
+
+  function escapeHtml(s){ const d=document.createElement("div"); d.textContent=s; return d.innerHTML; }
+
+  function positionBar(bar, task){
+    const left = daysBetween(viewStart, task.start) * COL_W;
+    const width = Math.max(daysBetween(task.start, task.end), 1) * COL_W - 4;
+    bar.style.left = left + "px";
+    bar.style.width = Math.max(width, 10) + "px";
+  }
+
+  // ---------- drag to move ----------
+  function attachDrag(bar, task){
+    bar.addEventListener("mousedown", (e) => {
+      if(e.target.classList.contains("handle")) return;
+      e.preventDefault();
+      dragState = { mode:"move", task, startX:e.clientX, origStart:task.start, origEnd:task.end, bar, ctrlKey: (e.ctrlKey || e.metaKey) };
+      bar.classList.add("dragging");
+      dlog("1) MOUSEDOWN su barra (sposta)\n   " + describeTask(task), "step");
+    });
+  }
+  function attachResize(handle, task, side){
+    handle.addEventListener("mousedown", (e) => {
+      e.preventDefault(); e.stopPropagation();
+      dragState = { mode:"resize-"+side, task, startX:e.clientX, origStart:task.start, origEnd:task.end, bar: handle.parentElement };
+      handle.parentElement.classList.add("dragging");
+      dlog("1) MOUSEDOWN su maniglia " + side + " (ridimensiona)\n   " + describeTask(task), "step");
+    });
+  }
+
+  document.addEventListener("mousemove", (e) => {
+    if(splitDrag){
+      const dx = e.clientX - splitDrag.startX;
+      taskColWidth = Math.max(TASKCOL_MIN, Math.min(TASKCOL_MAX, splitDrag.startW + dx));
+      taskCol.style.flex = "0 0 " + taskColWidth + "px";
+    }
+    if(boardResizeDrag){
+      const dy = e.clientY - boardResizeDrag.startY;
+      const newH = Math.max(BOARD_H_MIN, boardResizeDrag.startH + dy);
+      board.style.maxHeight = "none";
+      board.style.height = newH + "px";
+    }
+    if(dragState){
+      const dx = e.clientX - dragState.startX;
+      const dayDelta = Math.round(dx / COL_W);
+      let newStart = dragState.origStart, newEnd = dragState.origEnd;
+      if(dragState.mode === "move"){
+        newStart = addDays(dragState.origStart, dayDelta);
+        newEnd = addDays(dragState.origEnd, dayDelta);
+      } else if(dragState.mode === "resize-left"){
+        newStart = addDays(dragState.origStart, dayDelta);
+        if(newStart >= dragState.origEnd) newStart = addDays(dragState.origEnd, -1);
+      } else if(dragState.mode === "resize-right"){
+        newEnd = addDays(dragState.origEnd, dayDelta);
+        if(newEnd <= dragState.origStart) newEnd = addDays(dragState.origStart, 1);
+      }
+      const preview = { start:newStart, end:newEnd };
+      positionBar(dragState.bar, preview);
+      dragState.previewStart = newStart;
+      dragState.previewEnd = newEnd;
+    }
+  });
+
+  function handleBarClick(id, isCtrl){
+    if(isCtrl){
+      if(selectedIds.has(id)) selectedIds.delete(id); else selectedIds.add(id);
+    } else {
+      selectedIds.clear();
+    }
+    render();
+  }
+
+  document.addEventListener("mouseup", async (e) => {
+    if(splitDrag){
+      splitDrag = null;
+      splitter.classList.remove("dragging");
+      localStorage.setItem("gcal_gantt_taskcol_w", Math.round(taskColWidth));
+    }
+    if(boardResizeDrag){
+      boardResizeDrag = null;
+      boardResizeHandle.classList.remove("dragging");
+      localStorage.setItem("gcal_gantt_board_h", Math.round(board.getBoundingClientRect().height));
+    }
+    if(dragState){
+      const ds = dragState;
+      ds.bar.classList.remove("dragging");
+      dragState = null;
+      const noChange = (ds.previewStart === undefined) ||
+        (fmtISO(ds.previewStart) === fmtISO(ds.origStart) && fmtISO(ds.previewEnd) === fmtISO(ds.origEnd));
+      if(noChange){
+        dlog("2) MOUSEUP: nessuna variazione di date (era solo un click)", "warn");
+        if(ds.mode === "move") handleBarClick(ds.task.id, ds.ctrlKey);
+        return;
+      }
+      dlog(`2) MOUSEUP: ${fmtISO(ds.origStart)} → ${fmtISO(ds.origEnd)}  diventa  ${fmtISO(ds.previewStart)} → ${fmtISO(ds.previewEnd)}`, "step");
+      ds.task.start = ds.previewStart;
+      ds.task.end = ds.previewEnd;
+      const expStart = fmtISO(ds.previewStart), expEnd = fmtISO(ds.previewEnd), expId = ds.task.id;
+      try{
+        dlog("3) invio la modifica a Google…", "step");
+        await patchTaskDates(ds.task);
+        if(ds.task.role === "parent" && ds.task.groupId){
+          // i figli ereditano le nuove date del padre (sovrascrivendo le loro)
+          const kids = events.filter(ev => ev.groupId === ds.task.groupId && ev.role !== "parent" && ev.id !== ds.task.id);
+          kids.forEach(k => { k.start = ds.task.start; k.end = ds.task.end; });
+          render();
+          dlog(`   il padre ha ${kids.length} figli: aggiorno anche loro`, "step");
+          await Promise.all(kids.map(k => patchTaskDates(k)));
+        }
+        dlog("4) ricarico gli eventi da Google…", "step");
+        await loadEvents();
+        const after = events.find(ev => ev.id === expId);
+        if(!after){
+          dlog("5) ⚠ dopo la ricarica l'evento NON è più nella lista (id cambiato o fuori intervallo?)", "warn");
+        } else if(fmtISO(after.start) === expStart && fmtISO(after.end) === expEnd){
+          dlog(`5) ✔ verifica OK: Google ha le nuove date ${expStart} → ${expEnd}`, "ok");
+        } else {
+          dlog(`5) ⚠ Google ha restituito date DIVERSE da quelle inviate!\n   inviate: ${expStart} → ${expEnd}\n   ricevute: ${fmtISO(after.start)} → ${fmtISO(after.end)}\n   ${describeTask(after)}`, "err");
+        }
+      }
+      catch(e){ console.error(e); dlog("✖ ERRORE nel salvataggio: " + e.message + "\n   → le date tornano come prima", "err"); loadEvents(); }
+    }
+  });
+
+  // ---------- meteo detail modal ----------
+  const meteoOverlay = document.getElementById("meteo-overlay");
+  const MESI_IT = ["gennaio","febbraio","marzo","aprile","maggio","giugno","luglio","agosto","settembre","ottobre","novembre","dicembre"];
+  const GIORNI_IT = ["Domenica","Lunedì","Martedì","Mercoledì","Giovedì","Venerdì","Sabato"];
+  function formatMeteoDate(d){
+    return `${GIORNI_IT[d.getDay()]}, ${d.getDate()} ${MESI_IT[d.getMonth()]}`;
+  }
+  // pulisce la descrizione: toglie HTML e la parte promozionale dopo l'orario di ultimo aggiornamento
+  function cleanMeteoDescription(raw){
+    let t = String(raw || "").replace(/<br\s*\/?>/gi, "\n").replace(/<\/(p|div|li)>/gi, "\n");
+    t = new DOMParser().parseFromString(t, "text/html").body.textContent || "";
+    t = t.replace(/\u00a0/g, " ").replace(/\r/g, "");
+    const m = t.match(/\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2})?/);
+    if(m){
+      t = t.slice(0, m.index + m[0].length);
+    } else {
+      const i = t.search(/(forecast by|previsioni di)\s+meteomatics/i);
+      if(i >= 0) t = t.slice(0, i);
+    }
+    const lines = t.split("\n").map(l => l.replace(/\s+$/, ""));
+    while(lines.length && !lines[0].trim()) lines.shift();
+    while(lines.length && !lines[lines.length - 1].trim()) lines.pop();
+    return lines.join("\n");
+  }
+  function openMeteoModal(date, info){
+    document.getElementById("meteo-modal-icon").textContent = info.icon || "";
+    document.getElementById("meteo-modal-temp").textContent = info.tempText || "";
+    document.getElementById("meteo-modal-date").textContent = formatMeteoDate(date);
+    document.getElementById("meteo-modal-location").textContent = info.location ? ("📍 " + info.location) : "";
+    document.getElementById("meteo-modal-desc").textContent = cleanMeteoDescription(info.description);
+    meteoOverlay.style.display = "flex";
+  }
+  document.getElementById("meteo-modal-close").addEventListener("click", () => { meteoOverlay.style.display = "none"; });
+  meteoOverlay.addEventListener("click", (e) => { if(e.target === meteoOverlay) meteoOverlay.style.display = "none"; });
+  document.addEventListener("keydown", (e) => {
+    if(e.key === "Escape" && meteoOverlay.style.display === "flex") meteoOverlay.style.display = "none";
+  });
+
+  // ---------- DEBUG extendedProperties ----------
+  function showDebugInfo(task){
+    const lines = [
+      "ID evento: " + task.id,
+      "Calendario: " + calName(task.calId) + " (" + task.calId + ")",
+      "Titolo: " + task.title,
+      "groupId (letto): " + (task.groupId || "—"),
+      "role (letto): " + (task.role || "—"),
+      "priority (letta): " + (task.priority || "—"),
+      "",
+      "extendedProperties.shared:",
+      JSON.stringify(task.sharedProps, null, 2),
+      "",
+      "extendedProperties.private:",
+      JSON.stringify(task.privateProps, null, 2)
+    ];
+    alert(lines.join("\n"));
+  }
+
+  // ---------- new task modal ----------
+  const overlay = document.getElementById("modal-overlay");
+  const newChildCheck = document.getElementById("new-child");
+  const parentPicker = document.getElementById("parent-picker");
+  const newParentSelect = document.getElementById("new-parent-select");
+  function parentCandidates(){
+    // un rappresentante per ogni gruppo esistente (gli eventi "padre")
+    return events.filter(t => t.role === "parent" && t.groupId);
+  }
+  function refreshParentSelect(){
+    const candidates = parentCandidates();
+    newParentSelect.innerHTML = "";
+    if(!candidates.length){
+      const opt = document.createElement("option");
+      opt.textContent = "Nessun evento padre disponibile";
+      opt.value = "";
+      newParentSelect.appendChild(opt);
+      newParentSelect.disabled = true;
+      return;
+    }
+    newParentSelect.disabled = false;
+    candidates.sort((a,b) => a.title.localeCompare(b.title)).forEach(p => {
+      const opt = document.createElement("option");
+      opt.value = p.groupId;
+      opt.dataset.calId = p.calId;
+      opt.dataset.color = p.color || "";
+      opt.textContent = p.title + " (" + calName(p.calId) + ")";
+      newParentSelect.appendChild(opt);
+    });
+  }
+  newChildCheck.addEventListener("change", () => {
+    parentPicker.style.display = newChildCheck.checked ? "block" : "none";
+  });
+  async function saveEditedTask(id, title, start, end, when, endDT){
+    const t = events.find(ev => ev.id === id);
+    if(!t) return;
+    const body = when
+      ? { summary: t.paused ? withPauseIcon(title) : title,
+          start: { dateTime: when.start.dateTime, timeZone: when.start.timeZone, date: null },
+          end:   { dateTime: when.end.dateTime,   timeZone: when.end.timeZone,   date: null } }
+      : { summary: t.paused ? withPauseIcon(title) : title,
+          start: { date: fmtISO(start), dateTime: null },
+          end:   { date: fmtISO(end),   dateTime: null } };
+    try{
+      await gapi("PATCH", `/calendars/${encodeURIComponent(t.calId)}/events/${id}`, body);
+      // se è un padre e i giorni sono cambiati, i figli ereditano le nuove date (come nel trascinamento)
+      if(t.role === "parent" && t.groupId){
+        const newStart = start;
+        const newEnd = when ? addDays(startOfDay(endDT), (endDT.getHours() || endDT.getMinutes()) ? 1 : 0) : end;
+        if(fmtISO(newStart) !== fmtISO(t.start) || fmtISO(newEnd) !== fmtISO(t.end)){
+          const kids = events.filter(ev => ev.groupId === t.groupId && ev.role !== "parent" && ev.id !== t.id);
+          kids.forEach(k => { k.start = newStart; k.end = newEnd; });
+          await Promise.all(kids.map(k => patchTaskDates(k)));
+        }
+      }
+      await loadEvents();
+    }catch(err){ console.error(err); alert("Non è stato possibile salvare le modifiche."); loadEvents(); }
+  }
+  let editingTaskId = null;   // null = creazione, altrimenti id dell'evento in modifica
+  function setModalMode(editing){
+    document.getElementById("modal-heading").textContent = editing ? "Modifica evento" : "Nuovo evento";
+    document.getElementById("confirm-new").textContent = editing ? "Salva" : "Crea";
+    document.getElementById("independent-field").style.display = editing ? "none" : "";
+  }
+  function openEditTaskModal(taskId){
+    const t = events.find(ev => ev.id === taskId);
+    if(!t) return;
+    editingTaskId = taskId;
+    setModalMode(true);
+    const hhmm = d => String(d.getHours()).padStart(2,"0") + ":" + String(d.getMinutes()).padStart(2,"0");
+    const r = t.raw || {};
+    const titleInput = document.getElementById("new-title");
+    titleInput.value = stripPauseIcon(t.title);
+    if(r.start && r.start.dateTime && r.end && r.end.dateTime){
+      const sd = new Date(r.start.dateTime), ed = new Date(r.end.dateTime);
+      document.getElementById("new-start").value = fmtISO(sd);
+      document.getElementById("new-end").value = fmtISO(ed);
+      document.getElementById("new-start-time").value = hhmm(sd);
+      document.getElementById("new-end-time").value = hhmm(ed);
+    } else {
+      document.getElementById("new-start").value = fmtISO(t.start);
+      // come nella creazione: fine uguale all'inizio = un solo giorno
+      document.getElementById("new-end").value = daysBetween(t.start, t.end) <= 1 ? fmtISO(t.start) : fmtISO(t.end);
+      document.getElementById("new-start-time").value = "";
+      document.getElementById("new-end-time").value = "";
+    }
+    document.getElementById("new-end").dataset.touched = "1";
+    overlay.style.display = "flex";
+    titleInput.focus();
+    titleInput.setSelectionRange(titleInput.value.length, titleInput.value.length);
+  }
+  function openNewTaskModal(start){
+    editingTaskId = null;
+    setModalMode(false);
+    document.getElementById("new-end").dataset.touched = "";
+    const titleInput = document.getElementById("new-title");
+    titleInput.value = "⬇️ ";
+    document.getElementById("new-start").value = fmtISO(start);
+    document.getElementById("new-end").value = fmtISO(start);
+    document.getElementById("new-start-time").value = "";
+    document.getElementById("new-end-time").value = "";
+    newChildCheck.checked = false;      // un nuovo evento è indipendente, salvo che si attivi "Evento figlio"
+    parentPicker.style.display = "none";
+    refreshParentSelect();
+    overlay.style.display = "flex";
+    titleInput.focus();
+    titleInput.setSelectionRange(titleInput.value.length, titleInput.value.length);
+  }
+  document.getElementById("new-task-btn").addEventListener("click", () => {
+    openNewTaskModal(new Date());
+  });
+  // cambiando la data di inizio, la data di fine la segue finché l'utente non la tocca lui stesso
+  document.getElementById("new-start").addEventListener("change", (e) => {
+    const endInput = document.getElementById("new-end");
+    if(!endInput.dataset.touched) endInput.value = e.target.value;
+  });
+  document.getElementById("new-end").addEventListener("change", (e) => { e.target.dataset.touched = "1"; });
+  document.getElementById("cancel-new").addEventListener("click", () => overlay.style.display = "none");
+  document.getElementById("confirm-new").addEventListener("click", async () => {
+    const typedTitle = document.getElementById("new-title").value.trim();
+    if(editingTaskId && !typedTitle){ alert("Il titolo non può essere vuoto."); return; }
+    const title = typedTitle || "Nuovo task";
+    const start = parseISO(document.getElementById("new-start").value);
+    let end = parseISO(document.getElementById("new-end").value);
+    if(end <= start) end = addDays(start,1);
+
+    // orari facoltativi: vuoti = tutto il giorno; solo inizio = fine un'ora dopo
+    const stTime = document.getElementById("new-start-time").value;   // "HH:MM" oppure ""
+    const enTime = document.getElementById("new-end-time").value;
+    let when = null, endDT = null;
+    if(enTime && !stTime){ alert("Hai indicato l'ora di fine ma non quella di inizio."); return; }
+    if(stTime){
+      const [sh, sm] = stTime.split(":").map(Number);
+      const startDT = new Date(start.getFullYear(), start.getMonth(), start.getDate(), sh, sm);
+      const endDay = parseISO(document.getElementById("new-end").value);   // data di fine così com'è nel campo
+      if(enTime){
+        const [eh, em] = enTime.split(":").map(Number);
+        endDT = new Date(endDay.getFullYear(), endDay.getMonth(), endDay.getDate(), eh, em);
+        if(endDT <= startDT){ alert("L'ora di fine deve essere successiva a quella di inizio."); return; }
+      } else {
+        // solo inizio: un'ora dopo (se la data di fine è più avanti, un'ora dopo l'orario di inizio di quel giorno)
+        const base = endDay > start ? new Date(endDay.getFullYear(), endDay.getMonth(), endDay.getDate(), sh, sm) : startDT;
+        endDT = new Date(base.getTime() + 3600000);
+      }
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      when = { start: { dateTime: startDT.toISOString(), timeZone: tz }, end: { dateTime: endDT.toISOString(), timeZone: tz } };
+    }
+
+    document.getElementById("new-end").dataset.touched = "";
+    overlay.style.display = "none";
+    if(editingTaskId){
+      const id = editingTaskId;
+      editingTaskId = null;
+      await saveEditedTask(id, title, start, end, when, endDT);
+      return;
+    }
+    try{
+      if(newChildCheck.checked && newParentSelect.value){
+        const opt = newParentSelect.selectedOptions[0];
+        await createChildTask(title, start, end, opt.dataset.calId, newParentSelect.value, when);
+      } else {
+        await createTask(title, start, end, when);
+      }
+    }catch(e){ console.error(e); }
+  });
+
+  // ---------- right-click context menu on the timeline ----------
+  const ctxMenu = document.getElementById("ctx-menu");
+  const ctxNewBtn = document.getElementById("ctx-new");
+  const ctxColorBtn = document.getElementById("ctx-color");
+  const ctxDeleteBtn = document.getElementById("ctx-delete");
+  const colorInput = document.getElementById("color-input");
+  let ctxDate = null;
+  let ctxBulkIds = [];
+  let ctxTaskTitle = "";
+  let ctxPosX = 0;
+  let ctxPosY = 0;
+
+  timelineWrap.addEventListener("contextmenu", (e) => {
+    e.preventDefault();
+    ctxPosX = e.clientX;
+    ctxPosY = e.clientY;
+    const barEl = e.target.closest(".bar");
+    if(barEl){
+      const clickedId = barEl.dataset.eventId;
+      if(selectedIds.size > 1 && selectedIds.has(clickedId)){
+        ctxBulkIds = Array.from(selectedIds);
+      } else {
+        ctxBulkIds = [clickedId];
+      }
+      const t = events.find(ev => ev.id === clickedId);
+      ctxTaskTitle = t ? t.title : "questo evento";
+      ctxNewBtn.style.display = "none";
+      ctxColorBtn.style.display = "block";
+      ctxDeleteBtn.style.display = "block";
+      ctxColorBtn.textContent = ctxBulkIds.length > 1 ? `🎨 Cambia colore (${ctxBulkIds.length})` : "🎨 Cambia colore";
+      ctxDeleteBtn.textContent = ctxBulkIds.length > 1 ? `🗑️ Elimina (${ctxBulkIds.length} eventi)` : "🗑️ Elimina evento";
+    } else {
+      const rect = timelineWrap.getBoundingClientRect();
+      const xInContent = e.clientX - rect.left + timelineWrap.scrollLeft;
+      const dayIndex = Math.max(0, Math.min(NUM_DAYS - 1, Math.floor(xInContent / COL_W)));
+      ctxDate = addDays(viewStart, dayIndex);
+      ctxBulkIds = [];
+      ctxNewBtn.style.display = "block";
+      ctxColorBtn.style.display = "none";
+      ctxDeleteBtn.style.display = "none";
+    }
+    positionMenuAt(ctxMenu, e.clientX, e.clientY);
+  });
+  document.addEventListener("contextmenu", (e) => {
+    if(!timelineWrap.contains(e.target)) ctxMenu.style.display = "none";
+  });
+  document.addEventListener("click", (e) => {
+    ctxMenu.style.display = "none";
+    if(!e.target.closest(".bar") && selectedIds.size){
+      selectedIds.clear();
+      render();
+    }
+  });
+  document.addEventListener("scroll", () => { ctxMenu.style.display = "none"; }, true);
+
+  ctxNewBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    ctxMenu.style.display = "none";
+    if(ctxDate) openNewTaskModal(ctxDate);
+  });
+  ctxDeleteBtn.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    ctxMenu.style.display = "none";
+    if(!ctxBulkIds.length) return;
+    const msg = ctxBulkIds.length > 1 ? `Eliminare ${ctxBulkIds.length} eventi selezionati?` : `Eliminare "${ctxTaskTitle}"?`;
+    if(!confirm(msg)) return;
+    try{
+      for(const id of ctxBulkIds){
+        const t = events.find(ev => ev.id === id);
+        await deleteEventRaw(id, (t && t.calId) || calendarId);
+      }
+      selectedIds.clear();
+      loadEvents();
+    }catch(err){ console.error(err); loadEvents(); }
+  });
+  ctxColorBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    ctxMenu.style.display = "none";
+    if(!ctxBulkIds.length) return;
+    const first = events.find(ev => ev.id === ctxBulkIds[0]);
+    colorInput.value = (first && first.color) || "#3B78E7";
+    colorInput.style.left = ctxPosX + "px";
+    colorInput.style.top = ctxPosY + "px";
+    colorInput.click();
+  });
+  colorInput.addEventListener("change", async () => {
+    if(!ctxBulkIds.length) return;
+    const newColor = colorInput.value;
+    try{
+      for(const id of ctxBulkIds){ await patchTaskColor(id, newColor); }
+      loadEvents();
+    }catch(e){ console.error(e); }
+  });
+
+  // ---------- tasto destro sulla colonna attività: menu contestuale (Priorità e Sposta) ----------
+  const moveMenu = document.getElementById("move-menu");
+  function hideMoveMenu(){ moveMenu.style.display = "none"; }
+
+  // posiziona un menu contestuale in (x, y) ribaltandolo verso l'alto e/o verso sinistra
+  // quando non c'è spazio sufficiente: così non viene mai tagliato fuori dalla finestra
+  function positionMenuAt(menu, x, y){
+    menu.style.display = "block";
+    const mw = menu.offsetWidth, mh = menu.offsetHeight;
+    let left = x, top = y;
+    if(left + mw > window.innerWidth - 4) left = Math.max(4, window.innerWidth - mw - 4);
+    if(top + mh > window.innerHeight - 4) top = Math.max(4, window.innerHeight - mh - 4);
+    menu.style.left = left + "px";
+    menu.style.top = top + "px";
+  }
+
+  // ribalta un sottomenu verso l'alto quando, aprendolo verso il basso,
+  // uscirebbe dal bordo inferiore della finestra (es. tasto destro sulle ultime righe)
+  function autoFlipSubmenu(item){
+    const sub = item.querySelector(".submenu");
+    if(!sub) return;
+    item.addEventListener("mouseenter", () => {
+      // misura il sottomenu forzandolo visibile, senza disturbare la gestione :hover del CSS
+      const prevDisplay = sub.style.display;
+      sub.style.display = "block";
+      const sh = sub.offsetHeight;
+      sub.style.display = prevDisplay;
+      const r = item.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - 4 - r.bottom;
+      const spaceAbove = r.bottom - 8; // spazio disponibile sopra la voce di menu
+      sub.classList.toggle("open-up", (sh > spaceBelow) && (spaceAbove >= spaceBelow));
+    });
+  }
+
+  async function setPriorityForTasks(ids, priority){
+    try{
+      for(const id of ids){ await patchTaskPriority(id, priority); }
+      loadEvents();
+    }catch(err){ console.error(err); loadEvents(); }
+  }
+
+  async function moveTasksToCalendar(ids, destId){
+    const toMove = new Map();
+    ids.forEach(id => {
+      const t = events.find(ev => ev.id === id);
+      if(!t) return;
+      toMove.set(t.id, t);
+      // spostando un padre si spostano anche i suoi figli, per tenere il gruppo unito
+      if(t.role === "parent" && t.groupId){
+        events.filter(ev => ev.groupId === t.groupId && ev.id !== t.id).forEach(k => toMove.set(k.id, k));
+      }
+    });
+    try{
+      for(const t of toMove.values()){
+        if(t.calId === destId) continue;
+        await gapi("POST", `/calendars/${encodeURIComponent(t.calId)}/events/${t.id}/move?destination=${encodeURIComponent(destId)}`);
+      }
+    }catch(err){
+      console.error(err);
+      alert("Non è stato possibile spostare l'evento in \"" + calName(destId) + "\". Servono i permessi di modifica su entrambi i calendari, e alcuni tipi di evento non si possono spostare.");
+    }
+    selectedIds.clear();
+    loadEvents();
+  }
+
+  taskRowsViewport.addEventListener("contextmenu", (e) => {
+    const rowEl = e.target.closest(".task-row");
+    if(!rowEl) return;
+    e.preventDefault();
+    ctxMenu.style.display = "none";
+    const clickedId = rowEl.dataset.eventId;
+    const ids = (selectedIds.size > 1 && selectedIds.has(clickedId)) ? Array.from(selectedIds) : [clickedId];
+
+    moveMenu.innerHTML = "";
+
+    if(ids.length > 1){
+      const title = document.createElement("div");
+      title.className = "ctx-title";
+      title.textContent = `Azione su ${ids.length} eventi:`;
+      moveMenu.appendChild(title);
+    }
+
+    // 0. Voce MODIFICA (solo su un singolo evento)
+    if(ids.length === 1){
+      const editBtn = document.createElement("button");
+      editBtn.textContent = "✏️ Modifica";
+      editBtn.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        hideMoveMenu();
+        openEditTaskModal(ids[0]);
+      });
+      moveMenu.appendChild(editBtn);
+    }
+
+    // 0b. Voce PAUSA (toggle): se tutti gli eventi scelti sono già in pausa la toglie, altrimenti la mette
+    {
+      const sel = ids.map(id => events.find(ev => ev.id === id)).filter(Boolean);
+      const allPaused = sel.length > 0 && sel.every(t => t.paused);
+      const pauseBtn = document.createElement("button");
+      pauseBtn.textContent = allPaused ? "⏸️ Pausa  ✓" : "⏸️ Pausa";
+      pauseBtn.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        hideMoveMenu();
+        setPauseForTasks(ids, !allPaused);
+      });
+      moveMenu.appendChild(pauseBtn);
+    }
+
+    // 1. Voce PRIORITÀ con sottomenu
+    const prioItem = document.createElement("div");
+    prioItem.className = "menu-item";
+    prioItem.innerHTML = `<span>🚨 Priorità</span><span style="font-size:10px;color:var(--ink-soft);margin-left:8px;">▶</span>`;
+
+    const prioSubmenu = document.createElement("div");
+    prioSubmenu.className = "submenu";
+
+    const prioOptions = [
+      { key: "high", label: "Alta", class: "high" },
+      { key: "medium", label: "Media", class: "medium" },
+      { key: "low", label: "Bassa", class: "low" }
+    ];
+
+    prioOptions.forEach(opt => {
+      const btn = document.createElement("button");
+      btn.innerHTML = `<span class="prio-dot ${opt.class}"></span>${opt.label}`;
+      btn.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        hideMoveMenu();
+        setPriorityForTasks(ids, opt.key);
+      });
+      prioSubmenu.appendChild(btn);
+    });
+
+    const divider = document.createElement("div");
+    divider.style.borderTop = "1px solid var(--line)";
+    divider.style.margin = "4px 0";
+    prioSubmenu.appendChild(divider);
+
+    const rmBtn = document.createElement("button");
+    rmBtn.innerHTML = `<span style="margin-right:6px;font-size:12px;">✕</span>Rimuovi priorità`;
+    rmBtn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      hideMoveMenu();
+      setPriorityForTasks(ids, null);
+    });
+    prioSubmenu.appendChild(rmBtn);
+
+    prioItem.appendChild(prioSubmenu);
+    moveMenu.appendChild(prioItem);
+    autoFlipSubmenu(prioItem);
+
+    // 2. Voce SPOSTA SU CALENDARIO con sottomenu
+    const calItem = document.createElement("div");
+    calItem.className = "menu-item";
+    calItem.innerHTML = `<span>📅 Sposta su calendario</span><span style="font-size:10px;color:var(--ink-soft);margin-left:8px;">▶</span>`;
+
+    const calSubmenu = document.createElement("div");
+    calSubmenu.className = "submenu";
+
+    const shown = [calendarId].concat(extraCalendarIds);
+    const srcCals = new Set(ids.map(id => { const t = events.find(ev => ev.id === id); return t ? t.calId : null; }));
+    const dests = shown.filter(id => !(srcCals.size === 1 && srcCals.has(id)));
+
+    if(!dests.length){
+      const b = document.createElement("button");
+      b.disabled = true;
+      b.textContent = "Nessun altro calendario disponibile";
+      calSubmenu.appendChild(b);
+    } else {
+      dests.forEach(id => {
+        const b = document.createElement("button");
+        const sq = document.createElement("span");
+        sq.className = "sq";
+        sq.style.background = calColors[id] || "var(--accent)";
+        b.appendChild(sq);
+        b.appendChild(document.createTextNode(calName(id)));
+        b.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          hideMoveMenu();
+          moveTasksToCalendar(ids, id);
+        });
+        calSubmenu.appendChild(b);
+      });
+    }
+
+    calItem.appendChild(calSubmenu);
+    moveMenu.appendChild(calItem);
+    autoFlipSubmenu(calItem);
+
+    // Posizionamento menu (si ribalta verso l'alto sulle ultime righe) e inversione
+    // dei sottomenu se vicino al bordo destro del browser
+    positionMenuAt(moveMenu, e.clientX, e.clientY);
+
+    if(e.clientX + 340 > window.innerWidth){
+      prioSubmenu.classList.add("open-left");
+      calSubmenu.classList.add("open-left");
+    }
+  });
+
+  document.addEventListener("contextmenu", (e) => { if(!taskRowsViewport.contains(e.target)) hideMoveMenu(); });
+  document.addEventListener("click", hideMoveMenu);
+  document.addEventListener("scroll", hideMoveMenu, true);
+
+  // ---------- ricerca testuale negli eventi ----------
+  const searchInput = document.getElementById("search-input");
+  const searchBtn = document.getElementById("search-btn");
+  const searchClearBtn = document.getElementById("search-clear-btn");
+  function clearSearch(){
+    searchHighlightIds = null;
+    searchClearBtn.style.display = "none";
+    render();
+  }
+  function performSearch(){
+    const q = searchInput.value.trim().toLowerCase();
+    if(!q){ clearSearch(); return; }
+    const found = events.filter(t => !hiddenCalendarIds.has(t.calId) && !(hidePaused && t.paused) && !isOlderThanRecentLimit(t) && (t.title || "").toLowerCase().includes(q));
+    if(found.length === 0){
+      searchHighlightIds = null;
+      searchClearBtn.style.display = "none";
+      render();
+      alert(`Nessun evento trovato contenente "${searchInput.value.trim()}".`);
+      return;
+    }
+    searchHighlightIds = new Set(found.map(t => t.id));
+    searchClearBtn.style.display = "inline-flex";
+    // se un risultato è figlio di un gruppo compresso, espande il gruppo così la riga è visibile
+    found.forEach(t => { if(t.groupId && t.role !== "parent") collapsedGroups.delete(t.groupId); });
+    render();
+    scrollToFirstSearchHit();
+  }
+  // porta in vista (scroll verticale della lista) la prima riga evidenziata
+  function scrollToFirstSearchHit(){
+    if(!searchHighlightIds) return;
+    const idx = buildDisplayList().findIndex(entry => searchHighlightIds.has(entry.task.id));
+    if(idx < 0) return;
+    timelineWrap.scrollTo({ top: Math.max(0, (idx - 1) * ROW_H), behavior: "smooth" });
+  }
+  searchBtn.addEventListener("click", performSearch);
+  searchInput.addEventListener("keydown", (e) => { if(e.key === "Enter") performSearch(); });
+  searchClearBtn.addEventListener("click", () => { searchInput.value = ""; clearSearch(); });
+
+  // ---------- backup / ripristino delle proprietà Gantt (dgtGantt…) ----------
+  // Serve per i reset dei calendari: gli eventi vengono ricreati dall'app di sync e le proprietà andrebbero perse.
+  // Usa SOLO extendedProperties.private; extendedProperties.shared (gruppi padre/figlio) non viene né salvata né scritta.
+  // Gli eventi vengono riconosciuti per: calendario + titolo (senza l'icona di pausa) + date.
+  function pickGanttProps(obj){
+    const out = {};
+    Object.keys(obj || {}).forEach(k => { if(/^dgtGantt/.test(k) && obj[k] !== null && obj[k] !== undefined) out[k] = obj[k]; });
+    return out;
+  }
+  function normText(t){
+    const x = String(t || "").replace(/<[^>]*>/g, " ").normalize("NFC")
+      .replace(/[\uFE0E\uFE0F\u200B-\u200D\u2060]/g, "")      // selettori emoji e caratteri invisibili
+      .replace(/\s+/g, " ").trim();
+    return stripPauseIcon(x).replace(/\s+/g, " ").trim().toLowerCase();
+  }
+  function eventKey(ev){ return normText(ev.summary); }
+  function eventDateKey(ev){
+    const f = o => o ? (o.dateTime ? String(new Date(o.dateTime).getTime()) : (o.date || "")) : "";
+    return f(ev.start) + ">" + f(ev.end);
+  }
+  async function fetchAllRawEvents(calId){
+    let items = [], pageToken;
+    do{
+      const qs = new URLSearchParams({ singleEvents: "true", maxResults: "2500" });
+      if(pageToken) qs.set("pageToken", pageToken);
+      const data = await gapi("GET", `/calendars/${encodeURIComponent(calId)}/events?${qs.toString()}`);
+      items = items.concat(data.items || []);
+      pageToken = data.nextPageToken;
+    } while(pageToken);
+    return items.filter(ev => ev.status !== "cancelled" && ev.start && ev.end);
+  }
+  function samePropsList(list){
+    const j = JSON.stringify(list[0].private);
+    return list.every(e => JSON.stringify(e.private) === j);
+  }
+
+  // backup e ripristino lavorano solo sul calendario chiamato "GANTT"
+  function findGanttCalendarId(){
+    const c = availableCalendars.find(c => c.name.replace(/\s*\(principale\)\s*$/i, "").trim().toLowerCase() === "gantt");
+    return c ? c.id : null;
+  }
+
+  async function backupGanttProps(){
+    try{
+      const ganttId = findGanttCalendarId();
+      if(!ganttId){ dlog("BACKUP: calendario \"GANTT\" non trovato", "err"); alert("Non trovo un calendario chiamato \"GANTT\" tra quelli su cui hai permessi di modifica."); return; }
+      const calIds = [ganttId];
+      dlog("BACKUP: leggo tutti gli eventi del calendario GANTT (anche fuori dall'intervallo mostrato)…", "step");
+      const entries = [];
+      let total = 0;
+      for(const calId of calIds){
+        const items = await fetchAllRawEvents(calId);
+        total += items.length;
+        items.forEach(ev => {
+          const priv = pickGanttProps(ev.extendedProperties && ev.extendedProperties.private);   // solo extendedProperties.private
+          if(!Object.keys(priv).length) return;
+          entries.push({ calId, id: ev.id, key: eventKey(ev), dateKey: eventDateKey(ev),
+            title: ev.summary || "", start: ev.start, end: ev.end,
+            private: priv });
+        });
+      }
+      const file = { app: "gantt-backup", version: 1, calendar: "GANTT", calendarId: ganttId, createdAt: new Date().toISOString(), entries };
+      const blob = new Blob([JSON.stringify(file, null, 1)], { type: "application/json" });
+      const a = document.createElement("a");
+      const d = new Date(), pad = n => String(n).padStart(2, "0");
+      a.download = `gantt-backup-${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}.json`;
+      a.href = URL.createObjectURL(blob);
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+      dlog(`BACKUP completato: ${entries.length} eventi con dati Gantt (su ${total} letti). File: ${a.download}`, "ok");
+      alert(`Backup salvato: ${entries.length} eventi con proprietà Gantt (su ${total} eventi letti).`);
+    }catch(e){ console.error(e); dlog("BACKUP fallito: " + e.message, "err"); alert("Backup non riuscito: " + e.message); }
+  }
+
+  async function restoreGanttProps(file){
+    try{
+      const data = JSON.parse(await file.text());
+      if(!data || !Array.isArray(data.entries)) throw new Error("file non valido");
+      const ganttId = findGanttCalendarId();
+      if(!ganttId){ dlog("RIPRISTINO: calendario \"GANTT\" non trovato", "err"); alert("Non trovo un calendario chiamato \"GANTT\" tra quelli su cui hai permessi di modifica."); return; }
+      // solo gli eventi del calendario GANTT; la chiave viene ricalcolata dal titolo salvato (vale anche per backup di versioni precedenti)
+      const entries = data.entries.filter(e => e.calId === ganttId).map(e => Object.assign({}, e, { key: normText(e.title) }));
+      const skipped = data.entries.length - entries.length;
+      dlog(`RIPRISTINO sul calendario GANTT: ${entries.length} eventi nel backup` + (skipped ? ` (${skipped} di altri calendari: ignorati)` : ""), "step");
+      if(!entries.length){ alert("Nel file non ci sono eventi del calendario GANTT."); return; }
+
+      // eventi attuali (tutti, di tutti i calendari presenti nel backup)
+      const calIds = Array.from(new Set(entries.map(e => e.calId)));
+      const current = [];
+      for(const calId of calIds){
+        (await fetchAllRawEvents(calId)).forEach(ev => current.push({
+          calId, id: ev.id, key: eventKey(ev), dateKey: eventDateKey(ev), title: ev.summary || "",
+          private: (ev.extendedProperties && ev.extendedProperties.private) || {}
+        }));
+      }
+      const group = (list, keyFn) => { const m = {}; list.forEach(x => { const k = keyFn(x); (m[k] = m[k] || []).push(x); }); return m; };
+      const used = new Set(), pairs = [], ambiguous = [], notFound = [];
+      const tryPair = (bkList, curList, loose) => {
+        if(curList.length === bkList.length && (bkList.length === 1 || samePropsList(bkList))){
+          bkList.forEach((b, i) => { pairs.push({ bk: b, cur: curList[i], loose }); used.add(curList[i].id); });
+          return true;
+        }
+        return false;
+      };
+      // 1) stesso calendario + testo + date
+      const curExact = group(current, c => c.calId + "|" + c.key + "|" + c.dateKey);
+      const deferred = [];
+      Object.values(group(entries, b => b.calId + "|" + b.key + "|" + b.dateKey)).forEach(bkList => {
+        const b0 = bkList[0];
+        const curList = (curExact[b0.calId + "|" + b0.key + "|" + b0.dateKey] || []).filter(c => !used.has(c.id));
+        if(curList.length === 0) deferred.push(...bkList);
+        else if(!tryPair(bkList, curList, false)) ambiguous.push(...bkList);
+      });
+      // 2) stesso calendario + testo, date diverse (solo se la corrispondenza è unica)
+      const curLoose = group(current.filter(c => !used.has(c.id)), c => c.calId + "|" + c.key);
+      Object.values(group(deferred, b => b.calId + "|" + b.key)).forEach(bkList => {
+        const b0 = bkList[0];
+        const curList = (curLoose[b0.calId + "|" + b0.key] || []).filter(c => !used.has(c.id));
+        if(curList.length === 0) notFound.push(...bkList);
+        else if(!tryPair(bkList, curList, true)) ambiguous.push(...bkList);
+      });
+
+      // cosa c'è davvero da scrivere
+      const toWrite = [];
+      let alreadyOk = 0;
+      pairs.forEach(pr => {
+        const newPriv = Object.assign({}, pr.cur.private, pr.bk.private);
+        const changed = JSON.stringify(newPriv) !== JSON.stringify(pr.cur.private);
+        if(changed) toWrite.push({ pr, newPriv }); else alreadyOk++;
+      });
+      const looseCount = pairs.filter(p => p.loose).length;
+      notFound.slice(0, 40).forEach(b => {
+        const sim = current.find(c => c.calId === b.calId && !used.has(c.id) && c.key && b.key && (c.key.includes(b.key) || b.key.includes(c.key)));
+        dlog(`   non trovato: "${b.title}"` + (sim ? `\n      evento simile adesso: "${sim.title}"` : ""), "warn");
+      });
+      ambiguous.slice(0, 40).forEach(b => dlog(`   ambiguo (non toccato): "${b.title}"`, "warn"));
+      const msg = `Backup del ${data.createdAt || "?"}: ${data.entries.length} eventi.\n\n` +
+        `• Da ripristinare: ${toWrite.length}` + (looseCount ? ` (di cui ${looseCount} trovati con date diverse)` : "") + `\n` +
+        `• Già a posto: ${alreadyOk}\n• Non trovati: ${notFound.length}\n• Ambigui (non toccati): ${ambiguous.length}\n\nProcedo con il ripristino?`;
+      dlog("RIPRISTINO — riepilogo:\n" + msg, "step");
+      if(!toWrite.length){ alert(msg.replace("Procedo con il ripristino?", "Niente da scrivere.")); return; }
+      if(!confirm(msg)) { dlog("RIPRISTINO annullato dall'utente", "warn"); return; }
+
+      let done = 0, failed = 0;
+      for(const w of toWrite){
+        try{
+          // si scrive SOLO extendedProperties.private: le shared (padri/figli) non vengono toccate
+          await gapi("PATCH", `/calendars/${encodeURIComponent(w.pr.cur.calId)}/events/${w.pr.cur.id}`, { extendedProperties: { private: w.newPriv } });
+          done++;
+        }catch(e){ failed++; dlog(`   ✖ errore su "${w.pr.cur.title}": ${e.message}`, "err"); }
+      }
+      dlog(`RIPRISTINO finito: ${done} ripristinati, ${failed} errori`, failed ? "warn" : "ok");
+      await loadEvents();
+      alert(`Ripristino finito: ${done} eventi ripristinati` + (failed ? `, ${failed} con errore (vedi il log).` : "."));
+    }catch(e){ console.error(e); dlog("RIPRISTINO fallito: " + e.message, "err"); alert("Ripristino non riuscito: " + e.message); }
+  }
+
+  const APP_VERSION = "2.67";   // ⚠ da aggiornare a ogni modifica: compare nel titolo della legenda
+
+  // ---------- LEGENDA (pulsante ❓) ----------
+  // ⚠ DA AGGIORNARE ogni volta che si aggiunge, toglie o cambia un pulsante o una voce di menu.
+  // Il campo "ids" elenca gli id dei <button> coperti: se in alto o nell'intestazione "Attività" compare
+  // un pulsante che non è qui, il pannello di debug mostra un avviso.
+  const hi = t => `<span class="hi">${t}</span>`;
+  const HELP_SECTIONS = [
+    { title: "Barra in alto", items: [
+      { icon: hi("Calendario ▾"), text: "Sceglie il calendario principale.", ids: [] },
+      { icon: '<span class="primary-swatch" style="display:inline-block;background:#3B78E7;"></span>', text: "Cambia il colore delle barre del calendario principale.", ids: ["primary-swatch"] },
+      { icon: hi("🔍"), text: "Cerca negli eventi: le righe trovate si colorano di arancione e la lista scorre alla prima.", ids: ["search-btn"] },
+      { icon: hi("✕"), text: "Toglie l'evidenziazione della ricerca (compare dopo una ricerca).", ids: ["search-clear-btn"] },
+      { icon: hi("⏪"), text: "Mostra anche gli eventi passati, fino a circa 2 anni fa (giallo = attivo, compare l'etichetta rossa «ULTIMI DUE ANNI»).", ids: ["toggle-past-btn"] },
+      { icon: hi("−") + hi("+"), text: "Riduce / aumenta lo zoom della timeline (larghezza dei giorni). Funziona anche con Ctrl + rotella. Insieme ai due pulsanti delle righe forma un unico gruppo.", ids: ["zoom-out-btn","zoom-in-btn"] },
+      { icon: hi("⬍−") + hi("⬍+"), text: "Righe più basse / più alte.", ids: ["rowh-minus-btn","rowh-plus-btn"] },
+      { icon: hi("⏫") + hi("←") + hi("●") + hi("→") + hi("⏬"), text: "Gruppo di navigazione: ⏫ va al primo evento della lista, ← scorre la timeline indietro, ● torna a oggi, → scorre in avanti, ⏬ va all'ultimo evento della lista. Con ⏫ e ⏬ la timeline si sposta anche alla data di quell'evento.", ids: ["first-event-btn","prev-btn","today-btn","next-btn","last-event-btn"] },
+      { icon: hi("❓"), text: "Apre questa legenda.", ids: ["help-btn"] },
+      { icon: '<span class="btn-add" style="padding:4px 8px;font-size:11px;">+ Nuovo task</span>', text: "Crea un evento: titolo, date, orari facoltativi (vuoti = tutto il giorno; solo l'inizio = fine un'ora dopo) e, con la casella «Evento figlio», il padre a cui collegarlo.", ids: ["new-task-btn"] }
+    ]},
+    { title: "Intestazione della lista «Attività»", items: [
+      { icon: hi("📅+"), text: "Aggiunge o toglie calendari extra da mostrare insieme al principale.", ids: ["add-calendar-btn"] },
+      { icon: hi("☀️"), text: "Mostra / nasconde la riga del meteo (azzurro = visibile).", ids: ["meteo-toggle-btn"] },
+      { icon: hi("🚨"), text: "Mostra solo gli eventi che hanno una priorità (giallo = filtro attivo).", ids: ["prio-filter-btn"] },
+      { icon: hi("⏸️"), text: "Nasconde gli eventi in pausa (giallo = nascosti). Con il pulsante spento stanno in cima alla lista.", ids: ["pause-filter-btn"] },
+      { icon: hi("⏩"), text: "Nasconde gli eventi passati a medio termine: mostra solo da 7 giorni fa in avanti (giallo = attivo). Non si usa insieme a ⏪ e al riavvio torna spento.", ids: ["toggle-recent-btn"] },
+      { icon: hi("▦"), text: "Colora a strisce le attività che iniziano lo stesso giorno (giallo = attive).", ids: ["stripe-toggle-btn"] },
+      { icon: hi("A-") + hi("A+"), text: "Rimpicciolisce / ingrandisce il testo della lista.", ids: ["font-minus","font-plus"] }
+    ]},
+    { title: "Calendari extra (accanto al selettore)", items: [
+      { icon: '<span class="cal-dot" style="display:inline-block;background:#2E9E5B;"></span>', text: "Pallino: cambia il colore delle barre di quel calendario.", ids: [] },
+      { icon: hi("Nome"), text: "Clic sul nome: nasconde / mostra quel calendario senza toglierlo.", ids: [] },
+      { icon: hi("✕"), text: "Toglie il calendario dall'elenco di quelli extra.", ids: [] }
+    ]},
+    { title: "Nelle righe della lista", items: [
+      { icon: '<span class="done-checkbox"></span><span class="done-checkbox checked">✓</span>', text: "Segna l'evento come eseguito / da fare.", ids: [] },
+      { icon: '<span class="toggle-btn" style="margin:0;">▼</span><span class="toggle-btn" style="margin:0;">▶</span>', text: "Comprime / espande i figli di un gruppo.", ids: [] },
+      { icon: '<span class="priority-bar high"></span><span class="priority-bar medium"></span><span class="priority-bar low"></span>', text: "Barretta di priorità: rossa = alta, gialla = media, verde = bassa.", ids: [] },
+      { icon: hi("✕"), text: "Elimina l'evento (compare passando con il mouse sulla riga, chiede conferma).", ids: [] },
+      { icon: '<span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#3B78E7;"></span>', text: "Quadratino a destra: colore del calendario a cui appartiene l'evento.", ids: [] },
+      { icon: hi("⋯"), text: "Maniglia sotto il riquadro: trascina per cambiare l'altezza, doppio clic per ripristinarla.", ids: [] },
+      { icon: "Riga lilla", text: "Evento in pausa: sta in cima alla lista, con la barra a righe grigio-lilla nella timeline. Su Google ha ⏸️ nel titolo e colore grigio.", ids: [] }
+    ]},
+    { title: "Tasto destro sulla lista", items: [
+      { icon: hi("✏️ Modifica"), text: "Apre la maschera con titolo, date e orari dell'evento (con un solo evento selezionato).", ids: [] },
+      { icon: hi("⏸️ Pausa"), text: "Mette / toglie la pausa (✓ = in pausa). Con più eventi selezionati vale per tutti.", ids: [] },
+      { icon: hi("Priorità"), text: "Imposta alta, media o bassa, oppure nessuna priorità.", ids: [] },
+      { icon: hi("Sposta"), text: "Sposta l'evento su un altro calendario.", ids: [] }
+    ]},
+    { title: "Barre nella timeline", items: [
+      { icon: "Trascina", text: "Trascinando una barra sposti l'evento; trascinando i bordi la allunghi o la accorci. Con Ctrl + clic selezioni più eventi.", ids: [] },
+      { icon: "Mouse sopra", text: "Fermandoti qualche istante su una barra compare un balloon con il titolo completo, a una riga di distanza dalla barra.", ids: [] }
+    ]},
+    { title: "Tasto destro sulla timeline", items: [
+      { icon: hi("＋ Nuovo"), text: "Crea un nuovo evento nel giorno cliccato.", ids: [] },
+      { icon: hi("🎨 Colore"), text: "Cambia il colore della barra.", ids: [] },
+      { icon: hi("🗑️ Elimina"), text: "Elimina l'evento.", ids: [] }
+    ]},
+    { title: "Debug (pulsante 🐞 in alto)", items: [
+      { icon: hi("🐞"), text: "Mostra / nasconde il pannello nero di debug e la coccinella su ogni riga (mostra le proprietà dell'evento). Quando è attivo il pulsante è giallo.", ids: ["debug-toggle-btn"] },
+      { icon: hi("💾 Backup"), text: "Salva in un file le proprietà dgtGantt… (solo extendedProperties.private) degli eventi del calendario «GANTT». Le proprietà shared dei gruppi non vengono usate.", ids: [] },
+      { icon: hi("♻️ Ripristina"), text: "Rimette quelle proprietà private dopo un reset del calendario, partendo dal file di backup. Non tocca i gruppi padre/figlio.", ids: [] },
+      { icon: hi("Svuota"), text: "Cancella il testo del log.", ids: [] }
+    ]}
+  ];
+  const helpOverlay = document.getElementById("help-overlay");
+  const helpModal = document.getElementById("help-modal");
+  function openHelp(){
+    const appVersion = APP_VERSION;
+    helpModal.innerHTML = '<button class="help-close" id="help-close" title="Chiudi">✕</button>' +
+      `<h2 class="help-title">Gantt ${appVersion}</h2>` +
+      '<p class="help-desc">Gestisce i tuoi calendari Google come un diagramma di Gantt: gli eventi diventano barre su una timeline, con la lista delle attività a sinistra. Puoi creare, modificare, spostare e allungare gli eventi trascinandoli, raggrupparli in padri e figli, segnarli come eseguiti, dare una priorità o metterli in pausa, colorarli, cercarli e filtrarli. Ogni modifica viene salvata direttamente su Google Calendar.</p><p class="help-desc">La riga del meteo (pulsante ☀️) serve per i lavori all\'aperto: guardando le condizioni previste giorno per giorno puoi capire se è il momento giusto per farli.</p>' +
+      '<h2 class="help-legend-title">Legenda</h2>' +
+      HELP_SECTIONS.map(sec => `<h3>${sec.title}</h3>` + sec.items.map(it =>
+        `<div class="help-row"><span class="help-icon">${it.icon}</span><span class="help-text">${it.text}</span></div>`).join("")).join("");
+    helpOverlay.style.display = "flex";
+    document.getElementById("help-close").addEventListener("click", closeHelp);
+  }
+  function closeHelp(){ helpOverlay.style.display = "none"; }
+  document.getElementById("help-btn").addEventListener("click", openHelp);
+  helpOverlay.addEventListener("mousedown", (e) => { if(e.target === helpOverlay) closeHelp(); });
+  document.addEventListener("keydown", (e) => { if(e.key === "Escape" && helpOverlay.style.display === "flex") closeHelp(); });
+  // controllo: pulsanti presenti nell'interfaccia ma assenti dalla legenda
+  (function checkHelpCoverage(){
+    const covered = new Set(HELP_SECTIONS.flatMap(sec => sec.items.flatMap(it => it.ids || [])));
+    const missing = Array.from(document.querySelectorAll("header button[id], .head-fontctl button[id]"))
+      .map(b => b.id).filter(id => !covered.has(id));
+    if(missing.length) dlog("⚠ Legenda da aggiornare: pulsanti senza voce → " + missing.join(", "), "warn");
+  })();
+
+  // ---------- balloon con il titolo completo quando ci si ferma su una barra della timeline ----------
+  // il balloon sta a una riga di distanza dalla barra (sotto; sopra se sotto non c'è spazio)
+  const barTip = document.createElement("div");
+  barTip.id = "bar-tip";
+  document.body.appendChild(barTip);
+  let barTipTimer = null, barTipBar = null;
+  function hideBarTip(){
+    clearTimeout(barTipTimer); barTipTimer = null; barTipBar = null;
+    barTip.style.display = "none";
+  }
+  function showBarTip(bar){
+    const t = events.find(ev => ev.id === bar.dataset.eventId);
+    if(!t) return;
+    barTip.textContent = t.title;
+    barTip.style.visibility = "hidden";
+    barTip.style.display = "block";
+    const r = bar.getBoundingClientRect();
+    const tw = barTip.offsetWidth, th = barTip.offsetHeight;
+    const centerY = r.top + r.height / 2;
+    let top = centerY + ROW_H - th / 2;                     // una riga sotto
+    if(top + th > window.innerHeight - 8) top = centerY - ROW_H - th / 2;   // altrimenti una riga sopra
+    top = Math.max(8, Math.min(top, window.innerHeight - th - 8));
+    const wrapLeft = timelineWrap.getBoundingClientRect().left;
+    let left = Math.max(r.left, wrapLeft + 4);
+    left = Math.max(8, Math.min(left, window.innerWidth - tw - 8));
+    barTip.style.top = top + "px";
+    barTip.style.left = left + "px";
+    barTip.style.visibility = "visible";
+    barTipBar = bar;
+  }
+  timelineInner.addEventListener("mouseover", (e) => {
+    const bar = e.target.closest(".bar");
+    if(!bar || bar === barTipBar) return;
+    hideBarTip();
+    barTipTimer = setTimeout(() => showBarTip(bar), 350);
+  });
+  timelineInner.addEventListener("mouseout", (e) => {
+    const bar = e.target.closest(".bar");
+    if(!bar) return;
+    if(e.relatedTarget && bar.contains(e.relatedTarget)) return;
+    hideBarTip();
+  });
+  ["mousedown", "wheel", "contextmenu", "keydown"].forEach(ev => document.addEventListener(ev, hideBarTip, true));
+  timelineWrap.addEventListener("scroll", hideBarTip);
+
+  // ---------- modalità debug: pannello e coccinelle sulle righe, nascosti finché il pulsante 🐞 in alto non è attivo ----------
+  let debugMode = localStorage.getItem("gcal_gantt_debug") === "true";
+  document.body.classList.toggle("debug-on", debugMode);
+  const debugToggleBtn = document.getElementById("debug-toggle-btn");
+  debugToggleBtn.classList.toggle("active", debugMode);
+  debugToggleBtn.addEventListener("click", () => {
+    debugMode = !debugMode;
+    localStorage.setItem("gcal_gantt_debug", debugMode ? "true" : "false");
+    document.body.classList.toggle("debug-on", debugMode);
+    debugToggleBtn.classList.toggle("active", debugMode);
+  });
+
+  // ---------- boot ----------
+  if(clientId){ initGoogle(); }
+})();
+</script>
+</body>
+</html>
